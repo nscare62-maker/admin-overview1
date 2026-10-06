@@ -13,17 +13,17 @@
             <h5 class="mb-0"><i class="bi bi-funnel"></i> Filters</h5>
         </div>
         <div class="card-body">
-            <form method="get" class="row g-3">
+            <form method="get" id="sessionsFilterForm" class="row g-3 align-items-end">
                 <!-- Date Filter -->
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-calendar"></i> Date</label>
+                <div class="col-sm-6 col-md-3">
+                    <label class="form-label text-muted fw-medium" style="font-size: 0.85rem;"><i class="bi bi-calendar"></i> Date</label>
                     <input type="date" name="date" class="form-control" value="{{ date_filter if date_filter != 'all' else '' }}" placeholder="All dates">
-                    <small class="text-muted">Leave blank for all dates</small>
+                    <small class="text-muted" style="font-size: 0.75rem;">Leave blank for all dates</small>
                 </div>
                 
                 <!-- Employee Filter -->
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-person"></i> Employee</label>
+                <div class="col-sm-6 col-md-3">
+                    <label class="form-label text-muted fw-medium" style="font-size: 0.85rem;"><i class="bi bi-person"></i> Employee</label>
                     <select name="employee" class="form-select">
                         <option value="all" {{ 'selected' if employee_filter == 'all' else '' }}>All Employees</option>
                         {% for emp in employees %}
@@ -35,26 +35,29 @@
                 </div>
                 
                 <!-- Status Filter -->
-                <div class="col-md-3">
-                    <label class="form-label"><i class="bi bi-check-circle"></i> Status</label>
+                <div class="col-sm-6 col-md-2">
+                    <label class="form-label text-muted fw-medium" style="font-size: 0.85rem;"><i class="bi bi-check-circle"></i> Status</label>
                     <select name="status" class="form-select">
                         <option value="all" {{ 'selected' if status_filter == 'all' else '' }}>All Status</option>
                         <option value="ACTIVE" {{ 'selected' if status_filter == 'ACTIVE' else '' }}>Active</option>
                         <option value="CLOSED" {{ 'selected' if status_filter == 'CLOSED' else '' }}>Closed</option>
                     </select>
                 </div>
+
+                <!-- Live Quick Search -->
+                <div class="col-sm-6 col-md-2">
+                    <label for="sessionsQuickSearch" class="form-label text-muted fw-medium" style="font-size: 0.85rem;"><i class="bi bi-search"></i> Quick Search</label>
+                    <input type="text" id="sessionsQuickSearch" class="form-control" placeholder="Search sessions..." autocomplete="off">
+                </div>
                 
                 <!-- Filter Buttons -->
-                <div class="col-md-3">
-                    <label class="form-label">&nbsp;</label>
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-search"></i> Apply Filters
-                        </button>
-                        <a href="{{ url_for('sessions') }}" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-x-circle"></i> Clear
-                        </a>
-                    </div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-fill">
+                        <i class="bi bi-search"></i> Apply
+                    </button>
+                    <a href="{{ url_for('sessions') }}" class="btn btn-outline-secondary" title="Clear all filters">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </a>
                 </div>
             </form>
         </div>

@@ -130,33 +130,30 @@ def get_employee_filter_candidates(all_employees, employee_filter):
     if employee_filter in (None, '', 'all'):
         return set()
 
-    employee_filter = str(employee_filter)
-    candidates = set()
+    employee_filter = str(employee_filter).strip()
+    candidates = {employee_filter}
 
     for phone, emp_data in all_employees.items():
         if not isinstance(emp_data, dict):
             continue
 
-        for value in (
-            emp_data.get('employeeId'),
-            emp_data.get('empPhone'),
-            emp_data.get('employeePhone'),
-            emp_data.get('phone'),
-            phone,
-            emp_data.get('name')
-        ):
-            if value not in (None, '', 'N/A') and str(value) == employee_filter:
-                candidates.update({
-                    str(emp_data.get('employeeId', '')),
-                    str(emp_data.get('empPhone', '')),
-                    str(emp_data.get('employeePhone', '')),
-                    str(emp_data.get('phone', '')),
-                    str(phone),
-                    str(emp_data.get('name', '')),
-                })
-                break
+        emp_identifiers = {
+            str(emp_data.get('employeeId', '')).strip(),
+            str(emp_data.get('empPhone', '')).strip(),
+            str(emp_data.get('employeePhone', '')).strip(),
+            str(emp_data.get('phone', '')).strip(),
+            str(phone).strip(),
+            str(emp_data.get('name', '')).strip(),
+        }
+        emp_identifiers.discard('')
+        emp_identifiers.discard('None')
+        emp_identifiers.discard('N/A')
 
-    return {item for item in candidates if item not in (None, '', 'N/A')}
+        if employee_filter in emp_identifiers:
+            candidates.update(emp_identifiers)
+            break
+
+    return {item for item in candidates if item not in (None, '', 'N/A', 'None')}
 
 
 def get_employee_identifier_candidates(employee_data):
@@ -165,10 +162,10 @@ def get_employee_identifier_candidates(employee_data):
         return set()
 
     candidates = set()
-    for field in ('employeeId', 'empPhone', 'employeePhone', 'phone'):
+    for field in ('employeeId', 'empPhone', 'employeePhone', 'phone', 'employeeName', 'name', 'userId'):
         value = employee_data.get(field)
-        if value not in (None, '', 'N/A'):
-            candidates.add(str(value))
+        if value not in (None, '', 'N/A', 'null', 'None'):
+            candidates.add(str(value).strip())
 
     return candidates
 
@@ -721,72 +718,118 @@ def reset_password(employee_id):
 def attendance():
     """View all attendance records with start and end times"""
     try:
-        date_filter = request.args.get('date', 'all')  # Changed from today to 'all'
-        status_filter = request.args.get('status', 'all')
+        date_filter = request.args.get('date', '').strip() or 'all'
+        status_filter = request.args.get('status', '').strip() or 'all'
+        employee_filter = request.args.get('employee', '').strip() or 'all'
         
-        attendance_ref = db.reference('attendance')
-        all_attendance = attendance_ref.get() or {}
-        
-        # Get all sessions to fetch endTime
-        sessions_ref = db.reference('sessions')
-        all_sessions = sessions_ref.get() or {}
-        
-        # Work time range: 8:30 AM to 7:00 PM (8 hours standard)
-        WORK_START_HOUR = 8
-        WORK_START_MINUTE = 30
-        WORK_END_HOUR = 19  # 7:00 PM
-        WORK_END_MINUTE = 0
-        STANDARD_WORK_HOURS = 8
+        all_attendance = read_firebase_path('attendance')
+        all_sessions = read_firebase_path('sessions')
+        all_employees = read_firebase_path('users')
         
         attendance_list = []
         for att_id, att_data in all_attendance.items():
-            if att_data.get('date') == date_filter or date_filter == 'all':
-                if status_filter == 'all' or att_data.get('status') == status_filter:
-                    # Find corresponding session to get endTime
-                    session_id = att_data.get('sessionId')
-                    end_time = None
-                    work_duration_hours = 0
+            if not isinstance(att_data, dict):
+                continue
+
+            att_date = att_data.get('date')
+            if not att_date or str(att_date).strip() in ('N/A', 'None', 'null', ''):
+                st = att_data.get('startTime')
+                if st:
+                    try:
+                        att_date = datetime.fromtimestamp(int(st) / 1000).strftime('%Y-%m-%d')
+                    except Exception:
+                        att_date = 'N/A'
+                else:
+                    att_date = 'N/A'
+
+            if date_filter != 'all' and att_date != date_filter:
+                continue
+
+            att_status = str(att_data.get('status', '')).upper()
+            if status_filter != 'all' and att_status != status_filter.upper():
+                continue
+
+            if employee_filter != 'all':
+                filter_candidates = get_employee_filter_candidates(all_employees, employee_filter)
+                record_candidates = get_employee_identifier_candidates(att_data)
+                if not record_candidates.intersection(filter_candidates):
+                    continue
+
+            # Find corresponding session to get endTime
+            session_id = att_data.get('sessionId')
+            end_time = None
+            work_duration_hours = 0
+            
+            if session_id and session_id in all_sessions:
+                session = all_sessions[session_id]
+                if isinstance(session, dict):
+                    end_time = session.get('endTime')
                     
-                    if session_id and session_id in all_sessions:
-                        session = all_sessions[session_id]
-                        end_time = session.get('endTime')
-                        
-                        # Calculate work duration based on 8:30 AM - 7:00 PM range
-                        start_time = att_data.get('startTime', 0)
-                        if start_time and end_time:
-                            try:
-                                start_dt = datetime.fromtimestamp(int(start_time) / 1000)
-                                end_dt = datetime.fromtimestamp(int(end_time) / 1000)
-                                
-                                # Calculate actual work hours between start and end
-                                duration_ms = int(end_time) - int(start_time)
-                                work_duration_hours = round(duration_ms / (1000 * 60 * 60), 2)
-                            except:
-                                pass
-                    
-                    attendance_list.append({
-                        'id': att_id,
-                        'employeeId': att_data.get('employeeId'),
-                        'employeeName': att_data.get('employeeName'),
-                        'date': att_data.get('date'),
-                        'startTime': att_data.get('startTime'),
-                        'endTime': end_time,
-                        'workDurationHours': work_duration_hours,
-                        'status': att_data.get('status'),
-                        'lateByMinutes': att_data.get('lateByMinutes', 0),
-                        'isHalfDay': att_data.get('isHalfDay', False),
-                        'approvalStatus': att_data.get('approvalStatus', 'PENDING')
-                    })
+                    start_time = att_data.get('startTime', 0)
+                    if start_time and end_time:
+                        try:
+                            duration_ms = int(end_time) - int(start_time)
+                            work_duration_hours = round(duration_ms / (1000 * 60 * 60), 2)
+                        except Exception:
+                            pass
+            
+            attendance_list.append({
+                'id': att_id,
+                'employeeId': att_data.get('employeeId'),
+                'employeeName': att_data.get('employeeName') or 'Unknown',
+                'date': att_date,
+                'startTime': att_data.get('startTime'),
+                'endTime': end_time,
+                'workDurationHours': work_duration_hours,
+                'status': att_data.get('status'),
+                'lateByMinutes': att_data.get('lateByMinutes', 0),
+                'isHalfDay': att_data.get('isHalfDay', False),
+                'approvalStatus': att_data.get('approvalStatus', 'PENDING')
+            })
         
         attendance_list.sort(key=lambda x: safe_num(x.get('startTime')), reverse=True)
+
+        employee_list = []
+        seen_emp_ids = set()
+        for emp_id, emp_data in all_employees.items():
+            if not isinstance(emp_data, dict):
+                continue
+            employee_ref = (
+                emp_data.get('employeePhone') or
+                emp_data.get('empPhone') or
+                emp_data.get('phone') or
+                emp_data.get('employeeId') or
+                emp_id
+            )
+            name = emp_data.get('name') or 'Unknown'
+            seen_emp_ids.add(str(employee_ref))
+            if emp_data.get('employeeId'):
+                seen_emp_ids.add(str(emp_data.get('employeeId')))
+            employee_list.append({
+                'id': employee_ref,
+                'name': name
+            })
+        for att_data in all_attendance.values():
+            if not isinstance(att_data, dict):
+                continue
+            att_emp_id = att_data.get('employeeId')
+            if att_emp_id and str(att_emp_id) not in seen_emp_ids:
+                seen_emp_ids.add(str(att_emp_id))
+                employee_list.append({
+                    'id': str(att_emp_id),
+                    'name': att_data.get('employeeName') or str(att_emp_id)
+                })
+        employee_list.sort(key=lambda x: str(x.get('name') or '').lower())
         
         return render_template('attendance.html', 
                              attendance=attendance_list, 
                              date_filter=date_filter,
-                             status_filter=status_filter)
+                             status_filter=status_filter,
+                             employee_filter=employee_filter,
+                             employees=employee_list)
     except Exception as e:
         flash(f'Error loading attendance: {str(e)}', 'error')
-        return render_template('attendance.html', attendance=[])
+        return render_template('attendance.html', attendance=[], employees=[])
 
 @app.route('/attendance/<record_id>/approve', methods=['POST'])
 @login_required
@@ -837,7 +880,9 @@ def reject_attendance(record_id):
 def permissions():
     """View all permission requests"""
     try:
-        status_filter = request.args.get('status', 'PENDING')
+        status_filter = request.args.get('status', '').strip().upper() or 'PENDING'
+        if status_filter in ('', 'ALL'):
+            status_filter = 'all'
         
         permissions_ref = db.reference('permissions')
         all_permissions = permissions_ref.get() or {}
@@ -990,45 +1035,47 @@ def reject_permission(request_id):
 def sessions():
     """View all work sessions with date filter"""
     try:
-        status_filter = request.args.get('status', 'all')
-        date_filter = request.args.get('date', 'all')  # Changed from today to 'all'
-        employee_filter = request.args.get('employee', 'all')
+        status_filter = request.args.get('status', '').strip() or 'all'
+        date_filter = request.args.get('date', '').strip() or 'all'
+        employee_filter = request.args.get('employee', '').strip() or 'all'
         
         all_sessions = read_firebase_path('sessions')
         all_employees = read_firebase_path('users')
         
         sessions_list = []
         for sess_id, sess_data in all_sessions.items():
+            if not isinstance(sess_data, dict):
+                continue
+
             # Filter by status
-            if status_filter != 'all' and sess_data.get('status') != status_filter:
+            sess_status = str(sess_data.get('status', '')).upper()
+            if status_filter != 'all' and sess_status != status_filter.upper():
                 continue
             
+            # Determine session date (prefer stored 'date' string, fallback to timestamps)
+            session_date = sess_data.get('date')
+            if not session_date or str(session_date).strip() in ('N/A', 'None', 'null', ''):
+                ts = sess_data.get('startTime') or sess_data.get('endTime') or sess_data.get('closedAt')
+                if ts:
+                    try:
+                        session_date = datetime.fromtimestamp(int(ts) / 1000).strftime('%Y-%m-%d')
+                    except Exception:
+                        session_date = 'N/A'
+                else:
+                    session_date = 'N/A'
+
             # Filter by date
-            start_time = sess_data.get('startTime', 0)
-            session_date = 'N/A'
-            if start_time:
-                try:
-                    # Handle both string and int timestamps
-                    if isinstance(start_time, str):
-                        start_time = int(start_time)
-                    session_date = datetime.fromtimestamp(start_time / 1000).strftime('%Y-%m-%d')
-                    if date_filter != 'all' and session_date != date_filter:
-                        continue
-                except:
-                    pass
+            if date_filter != 'all' and session_date != date_filter:
+                continue
             
             # Filter by employee using all possible employee identifiers in Firebase
-            emp_id = get_employee_reference(sess_data)
             if employee_filter != 'all':
                 filter_candidates = get_employee_filter_candidates(all_employees, employee_filter)
-                if not filter_candidates:
-                    continue
-
                 record_candidates = get_employee_identifier_candidates(sess_data)
                 if not record_candidates.intersection(filter_candidates):
                     continue
             
-            # Get employee name using helper function
+            emp_id = get_employee_reference(sess_data)
             emp_data = get_employee_by_id(all_employees, emp_id) or all_employees.get(emp_id, {})
             
             # The session list only needs to know whether a photo reference exists,
@@ -1036,22 +1083,33 @@ def sessions():
             start_photo_available = has_stored_photo(sess_data.get('startPhotoUri'))
             end_photo_available = has_stored_photo(sess_data.get('endPhotoUri'))
             
-            # Normalize startTime to int for sorting
+            # Normalize timestamp for sorting: startTime -> endTime -> closedAt -> session_date
+            start_time = sess_data.get('startTime')
             start_time_for_sort = 0
             if start_time:
                 try:
-                    if isinstance(start_time, str):
-                        start_time_for_sort = int(start_time)
-                    else:
-                        start_time_for_sort = start_time
-                except:
+                    start_time_for_sort = int(start_time)
+                except Exception:
+                    start_time_for_sort = 0
+            if not start_time_for_sort:
+                for fallback_ts in (sess_data.get('endTime'), sess_data.get('closedAt')):
+                    if fallback_ts:
+                        try:
+                            start_time_for_sort = int(fallback_ts)
+                            break
+                        except Exception:
+                            pass
+            if not start_time_for_sort and session_date and session_date != 'N/A':
+                try:
+                    start_time_for_sort = int(datetime.strptime(session_date, '%Y-%m-%d').timestamp() * 1000)
+                except Exception:
                     start_time_for_sort = 0
             
             sessions_list.append({
                 'id': sess_id,
                 'employeeId': emp_id,
-                'employeeName': emp_data.get('name', 'Unknown'),
-                'employeeRole': emp_data.get('role', 'N/A'),
+                'employeeName': emp_data.get('name') or sess_data.get('employeeName') or 'Unknown',
+                'employeeRole': emp_data.get('role', sess_data.get('employeeRole', 'N/A')),
                 'workType': sess_data.get('workType'),
                 'status': sess_data.get('status'),
                 'startTime': sess_data.get('startTime'),
@@ -1064,15 +1122,16 @@ def sessions():
                 'endPhotoUri': sess_data.get('endPhotoUri'),
                 'startPhotoAvailable': start_photo_available,
                 'endPhotoAvailable': end_photo_available,
-                'date': session_date if start_time else 'N/A',
-                'startTimeSort': start_time_for_sort  # Add normalized time for sorting
+                'date': session_date,
+                'startTimeSort': start_time_for_sort
             })
         
-        # Sort by normalized startTime
+        # Sort by normalized timestamp descending
         sessions_list.sort(key=lambda x: safe_num(x.get('startTimeSort')), reverse=True)
         
-        # Prepare employee list for dropdown using the same employee reference shape as session records
+        # Prepare employee list for dropdown using users + session records
         employee_list = []
+        seen_refs = set()
         for emp_id, emp_data in all_employees.items():
             if not isinstance(emp_data, dict):
                 continue
@@ -1083,10 +1142,23 @@ def sessions():
                 emp_data.get('employeeId') or
                 emp_id
             )
+            seen_refs.add(str(employee_ref))
+            if emp_data.get('employeeId'):
+                seen_refs.add(str(emp_data.get('employeeId')))
             employee_list.append({
                 'id': employee_ref,
                 'name': emp_data.get('name') or 'Unknown'
             })
+        for sess_data in all_sessions.values():
+            if not isinstance(sess_data, dict):
+                continue
+            sess_emp_ref = sess_data.get('employeePhone') or sess_data.get('employeeId')
+            if sess_emp_ref and str(sess_emp_ref) not in seen_refs:
+                seen_refs.add(str(sess_emp_ref))
+                employee_list.append({
+                    'id': str(sess_emp_ref),
+                    'name': sess_data.get('employeeName') or str(sess_emp_ref)
+                })
         employee_list.sort(key=lambda x: str(x.get('name') or '').lower())
         
         return render_template('sessions.html', 
@@ -1204,9 +1276,9 @@ def session_detail(session_id):
 def tasks():
     """View all tasks"""
     try:
-        status_filter = request.args.get('status', 'all')
-        employee_filter = request.args.get('employee', 'all')
-        role_filter = request.args.get('role', 'all')  # field_staff or office_staff
+        status_filter = request.args.get('status', '').strip() or 'all'
+        employee_filter = request.args.get('employee', '').strip() or 'all'
+        role_filter = request.args.get('role', '').strip() or 'all'  # field_staff or office_staff
         
         tasks_ref = db.reference('tasks')
         all_tasks = tasks_ref.get() or {}
@@ -1630,8 +1702,8 @@ def update_task_status(task_id):
 def visits():
     """View all field visits with photos"""
     try:
-        date_filter = request.args.get('date', 'all')  # Changed from today to 'all'
-        employee_filter = request.args.get('employee', 'all')
+        date_filter = request.args.get('date', '').strip() or 'all'
+        employee_filter = request.args.get('employee', '').strip() or 'all'
         
         all_visits = read_firebase_path('visits')
         all_employees = read_firebase_path('users')
@@ -1640,47 +1712,42 @@ def visits():
             session_id: (has_stored_photo(session_data.get('startPhotoUri')) or
                           has_stored_photo(session_data.get('endPhotoUri')))
             for session_id, session_data in all_sessions.items()
+            if isinstance(session_data, dict)
         }
         
-        # Create a map of visitId to photo
         photo_map = {}
-        
         visits_list = []
         linked_session_ids = {
             visit_data.get('sessionId')
             for visit_data in all_visits.values()
-            if visit_data.get('sessionId')
+            if isinstance(visit_data, dict) and visit_data.get('sessionId')
         }
         for visit_id, visit_data in all_visits.items():
-            # Filter by employee using all possible employee identifiers in Firebase
-            emp_id = get_employee_reference(visit_data)
+            if not isinstance(visit_data, dict):
+                continue
+
+            created_at = visit_data.get('date') or visit_data.get('createdAt') or visit_data.get('timestamp') or '0'
+            visit_info = normalize_visit_datetime(created_at)
+            visit_date = visit_data.get('date') or visit_info['date']
+            if date_filter != 'all' and visit_date != date_filter:
+                continue
+
             if employee_filter != 'all':
                 filter_candidates = get_employee_filter_candidates(all_employees, employee_filter)
-                if not filter_candidates:
-                    continue
-
                 record_candidates = get_employee_identifier_candidates(visit_data)
                 if not record_candidates.intersection(filter_candidates):
                     continue
 
-            created_at = visit_data.get('createdAt') or visit_data.get('timestamp') or '0'
-            visit_info = normalize_visit_datetime(created_at)
-            visit_date = visit_info['date']
-            if date_filter != 'all' and visit_date != date_filter:
-                continue
-
-            # Get employee name using helper function
+            emp_id = get_employee_reference(visit_data)
             emp_data = get_employee_by_id(all_employees, emp_id) or all_employees.get(emp_id, {})
 
-            # Get photo if available
             photo_data = photo_map.get(visit_id)
             has_session_photo = session_photo_available.get(visit_data.get('sessionId'), False)
 
-            # Normalize timestamp for sorting
             timestamp = visit_data.get('timestamp', created_at)
             timestamp_for_sort = visit_info['sort_key']
 
-            emp_name = emp_data.get('name', 'Unknown')
+            emp_name = emp_data.get('name') or visit_data.get('employeeName') or 'Unknown'
             emp_photo = None
             sess_id = visit_data.get('sessionId')
             if sess_id:
@@ -1696,7 +1763,7 @@ def visits():
                 'employeeName': emp_name,
                 'employeeInitials': get_employee_initials(emp_name),
                 'employeePhoto': emp_photo,
-                'date': visit_info['date'],
+                'date': visit_date,
                 'time': visit_info['time'],
                 'datetime': visit_info['datetime'],
                 'timestamp': timestamp,
@@ -1711,6 +1778,8 @@ def visits():
             })
 
         for session_id, session_data in all_sessions.items():
+            if not isinstance(session_data, dict):
+                continue
             status = str(session_data.get('status', '')).upper()
             work_type = str(session_data.get('workType', '')).upper()
             if (session_id in linked_session_ids or
@@ -1720,14 +1789,12 @@ def visits():
 
             end_time = session_data.get('endTime') or session_data.get('startTime') or '0'
             visit_info = normalize_visit_datetime(end_time)
-            if date_filter != 'all' and visit_info['date'] != date_filter:
+            session_date = session_data.get('date') or visit_info['date']
+            if date_filter != 'all' and session_date != date_filter:
                 continue
 
             if employee_filter != 'all':
                 filter_candidates = get_employee_filter_candidates(all_employees, employee_filter)
-                if not filter_candidates:
-                    continue
-
                 record_candidates = get_employee_identifier_candidates(session_data)
                 if not record_candidates.intersection(filter_candidates):
                     continue
@@ -1735,7 +1802,7 @@ def visits():
             emp_id = get_employee_reference(session_data)
             emp_data = get_employee_by_id(all_employees, emp_id) or all_employees.get(emp_id, {})
             location = session_data.get('endLocation') or session_data.get('startLocation') or {}
-            emp_name = emp_data.get('name', 'Unknown')
+            emp_name = emp_data.get('name') or session_data.get('employeeName') or 'Unknown'
             sess_photo = load_session_photo(session_id, 'start', session_data)
             visits_list.append({
                 'id': f'session-{session_id}',
@@ -1743,7 +1810,7 @@ def visits():
                 'employeeName': emp_name,
                 'employeeInitials': get_employee_initials(emp_name),
                 'employeePhoto': sess_photo,
-                'date': visit_info['date'],
+                'date': session_date,
                 'time': visit_info['time'],
                 'datetime': visit_info['datetime'],
                 'timestamp': end_time,
@@ -1767,8 +1834,9 @@ def visits():
 
         visits_list.sort(key=lambda x: (-safe_num(x.get('dateSort')), safe_num(x.get('timestampSort'))))
         
-        # Prepare employee list for dropdown using the same employee reference shape as Firebase visit records
+        # Prepare employee list for dropdown using users + visits records
         employee_list = []
+        seen_refs = set()
         for emp_id, emp_data in all_employees.items():
             if not isinstance(emp_data, dict):
                 continue
@@ -1779,10 +1847,23 @@ def visits():
                 emp_data.get('employeeId') or
                 emp_id
             )
+            seen_refs.add(str(employee_ref))
+            if emp_data.get('employeeId'):
+                seen_refs.add(str(emp_data.get('employeeId')))
             employee_list.append({
                 'id': employee_ref,
                 'name': emp_data.get('name') or 'Unknown'
             })
+        for vis_data in all_visits.values():
+            if not isinstance(vis_data, dict):
+                continue
+            vis_emp = vis_data.get('employeeId')
+            if vis_emp and str(vis_emp) not in seen_refs:
+                seen_refs.add(str(vis_emp))
+                employee_list.append({
+                    'id': str(vis_emp),
+                    'name': f"{vis_emp} (Field Staff)"
+                })
         employee_list.sort(key=lambda x: str(x.get('name') or '').lower())
         
         return render_template('visits.html', 
@@ -1942,9 +2023,9 @@ def visit_detail(visit_id):
 def reports():
     """Generate various reports"""
     try:
-        report_type = request.args.get('type', 'attendance')
-        month = request.args.get('month', datetime.now().strftime('%Y-%m'))
-        employee_id = request.args.get('employee', 'all')
+        report_type = request.args.get('type', '').strip() or 'attendance'
+        month = request.args.get('month', '').strip() or datetime.now().strftime('%Y-%m')
+        employee_id = request.args.get('employee', '').strip() or 'all'
         
         # Get all employees
         employees_ref = db.reference('users')

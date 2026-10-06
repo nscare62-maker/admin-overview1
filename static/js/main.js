@@ -120,11 +120,57 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // -------------------------------------------------------------
-    // 5. Attendance Live Quick Search
+    // 5. Live Quick Search (Attendance, Sessions, Visits)
     // -------------------------------------------------------------
+    function setupQuickSearch(inputId, containerSelector, itemSelector, emptyMsg) {
+        const input = document.getElementById(inputId);
+        const container = document.querySelector(containerSelector);
+        if (!input || !container) return;
+
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
+
+        input.addEventListener('input', function () {
+            const query = this.value.trim().toLowerCase();
+            const items = container.querySelectorAll(itemSelector);
+            let visibleCount = 0;
+
+            items.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                const matches = text.includes(query);
+                item.style.display = matches ? '' : 'none';
+                if (matches) visibleCount++;
+            });
+
+            let noMatchEl = container.querySelector('.quick-search-empty-state');
+            if (visibleCount === 0 && items.length > 0) {
+                if (!noMatchEl) {
+                    noMatchEl = document.createElement('div');
+                    noMatchEl.className = 'col-12 quick-search-empty-state text-center text-muted py-5';
+                    noMatchEl.innerHTML = `<i class="bi bi-search fs-3 d-block mb-2 text-muted"></i>${emptyMsg} "<strong>${escapeHtml(input.value)}</strong>"`;
+                    container.appendChild(noMatchEl);
+                } else {
+                    noMatchEl.innerHTML = `<i class="bi bi-search fs-3 d-block mb-2 text-muted"></i>${emptyMsg} "<strong>${escapeHtml(input.value)}</strong>"`;
+                    noMatchEl.style.display = '';
+                }
+            } else if (noMatchEl) {
+                noMatchEl.style.display = 'none';
+            }
+        });
+    }
+
+    // Attendance Table Search
     const attendanceSearch = document.getElementById('attendanceQuickSearch');
     const attendanceTable = document.getElementById('attendanceTable');
     if (attendanceSearch && attendanceTable) {
+        attendanceSearch.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+            }
+        });
         attendanceSearch.addEventListener('input', function () {
             const query = this.value.trim().toLowerCase();
             const rows = attendanceTable.querySelectorAll('tbody tr:not(.empty-state-row)');
@@ -146,13 +192,23 @@ document.addEventListener('DOMContentLoaded', function () {
                         <i class="bi bi-search me-1"></i> No matching attendance records found for "<strong>${escapeHtml(attendanceSearch.value)}</strong>"
                     </td>`;
                     attendanceTable.querySelector('tbody').appendChild(noMatchRow);
+                } else {
+                    noMatchRow.innerHTML = `<td colspan="9" class="py-4">
+                        <i class="bi bi-search me-1"></i> No matching attendance records found for "<strong>${escapeHtml(attendanceSearch.value)}</strong>"
+                    </td>`;
+                    noMatchRow.style.display = '';
                 }
-                noMatchRow.style.display = '';
             } else if (noMatchRow) {
                 noMatchRow.style.display = 'none';
             }
         });
     }
+
+    // Sessions Grid Quick Search
+    setupQuickSearch('sessionsQuickSearch', '.row.g-4', '.col-md-6.col-lg-4', 'No work sessions found matching');
+
+    // Visits Grid Quick Search
+    setupQuickSearch('visitsQuickSearch', '.row.g-3.mb-4', '.col-md-6.col-xl-4', 'No field visits found matching');
 
     // -------------------------------------------------------------
     // 6. Generic Table Search Helper

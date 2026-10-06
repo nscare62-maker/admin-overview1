@@ -20,7 +20,7 @@
     <!-- Filter Card -->
     <div class="card mb-4">
         <div class="card-body py-3">
-            <form method="get" class="row g-3 align-items-end">
+            <form method="get" id="visitsFilterForm" class="row g-3 align-items-end">
                 <!-- Date Filter -->
                 <div class="col-sm-6 col-md-3">
                     <label for="visitDate" class="form-label text-muted fw-medium" style="font-size: 0.785rem;">
@@ -34,7 +34,7 @@
                 </div>
 
                 <!-- Employee Filter -->
-                <div class="col-sm-6 col-md-4">
+                <div class="col-sm-6 col-md-3">
                     <label for="visitEmployee" class="form-label text-muted fw-medium" style="font-size: 0.785rem;">
                         <i class="bi bi-person me-1"></i> Employee
                     </label>
@@ -48,8 +48,16 @@
                     </select>
                 </div>
 
+                <!-- Quick Search Input -->
+                <div class="col-sm-6 col-md-3">
+                    <label for="visitsQuickSearch" class="form-label text-muted fw-medium" style="font-size: 0.785rem;">
+                        <i class="bi bi-search me-1"></i> Live Quick Search
+                    </label>
+                    <input type="text" id="visitsQuickSearch" class="form-control" placeholder="Search visits..." autocomplete="off">
+                </div>
+
                 <!-- Actions -->
-                <div class="col-md-5 d-flex gap-2">
+                <div class="col-md-3 d-flex gap-2">
                     <button type="submit" class="btn btn-primary flex-fill">
                         <i class="bi bi-search me-1"></i> Filter Visits
                     </button>
