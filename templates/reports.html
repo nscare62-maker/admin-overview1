@@ -2,7 +2,12 @@
 {% block title %}Reports - S2C Admin{% endblock %}
 {% block content %}
 <div class="container-fluid">
-    <h1 class="mb-4"><i class="bi bi-graph-up"></i> Reports & Analytics</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h1 class="mb-0"><i class="bi bi-graph-up text-primary me-2"></i> Reports &amp; Analytics</h1>
+        <a href="{{ url_for('report_print', type=report_type, month=month, employee=employee_id) }}" target="_blank" class="btn btn-success shadow-sm">
+            <i class="bi bi-printer me-1"></i> Print Reports Page
+        </a>
+    </div>
     
     <!-- Report Filters -->
     <div class="card shadow mb-4">
@@ -253,12 +258,12 @@
     {% if report_data %}
     <div class="card shadow mt-4">
         <div class="card-body text-center">
-            <h5 class="mb-3">Export Report</h5>
-            <button class="btn btn-success me-2" onclick="window.print()">
-                <i class="bi bi-printer"></i> Print Report
-            </button>
-            <button class="btn btn-primary" onclick="exportToCSV()">
-                <i class="bi bi-file-earmark-spreadsheet"></i> Export to CSV
+            <h5 class="mb-3">Export &amp; Print Options</h5>
+            <a href="{{ url_for('report_print', type=report_type, month=month, employee=employee_id) }}" target="_blank" class="btn btn-success me-2">
+                <i class="bi bi-printer me-1"></i> Print Reports Page
+            </a>
+            <button type="button" class="btn btn-primary" onclick="exportToCSV()">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export to CSV
             </button>
         </div>
     </div>
@@ -267,7 +272,38 @@
 
 <script>
 function exportToCSV() {
-    alert('CSV export feature coming soon!');
+    const table = document.querySelector('.table');
+    if (!table) {
+        alert('No report data table available to export.');
+        return;
+    }
+    let csv = [];
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+        let cols = row.querySelectorAll('th, td');
+        let rowData = [];
+        cols.forEach(col => {
+            let text = col.innerText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/\s+/g, ' ').trim();
+            text = text.replace(/"/g, '""');
+            rowData.push('"' + text + '"');
+        });
+        if (rowData.length > 0) {
+            csv.push(rowData.join(','));
+        }
+    });
+
+    const csvContent = '\uFEFF' + csv.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const reportType = '{{ report_type }}';
+    const month = '{{ month }}';
+    a.href = url;
+    a.download = `Report_${reportType}_${month}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 </script>
 {% endblock %}

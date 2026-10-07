@@ -203,7 +203,25 @@ def load_session_photo(session_id, photo_type, session_data=None):
                 pass
             return None
 
+        # Check if photo_uri is a direct push key in session_photos
+        if photo_uri.startswith('-'):
+            try:
+                photo_data = db.reference(f'session_photos/{photo_uri}').get()
+                if photo_data:
+                    photo = normalize_photo(photo_data)
+                    if photo:
+                        return photo
+            except Exception:
+                pass
+
         photo = normalize_photo(photo_uri)
+        if photo:
+            return photo
+
+    # Also check if session has direct photo field
+    direct_photo = (session_data or {}).get(f'{photo_type}Photo')
+    if direct_photo:
+        photo = normalize_photo(direct_photo)
         if photo:
             return photo
 
@@ -220,7 +238,7 @@ def has_stored_photo(value):
     if value.startswith(('/data/', 'file://', 'content://')):
         return False
     return (value.startswith(('data:image', 'http://', 'https://',
-                              'session_photos/')) or len(value) >= 100)
+                              'session_photos/')) or value.startswith('-') or len(value) >= 100)
 
 
 def normalize_visit_datetime(value):
@@ -1200,6 +1218,8 @@ def session_detail(session_id):
         session['employeeName'] = employee.get('name', session.get('employeeName', 'Unknown'))
         session['employeePhone'] = employee.get('phone', session.get('employeePhone', 'N/A'))
         session['employeeRole'] = employee.get('role', session.get('employeeRole', 'N/A'))
+        session['employeeInitials'] = get_employee_initials(session['employeeName'])
+        session['employeePhoto'] = employee.get('photo') or employee.get('profilePhoto') or employee.get('avatar') or None
         session['startPhoto'] = start_photo
         session['endPhoto'] = end_photo
 
@@ -2219,6 +2239,266 @@ def reports():
     except Exception as e:
         flash(f'Error generating report: {str(e)}', 'error')
         return render_template('reports.html', report_type='attendance', report_data=[], employees=[])
+
+@app.route('/reports/print')
+@login_required
+def report_print():
+    """Interactive print and export page covering all operational modules."""
+    try:
+        report_type = request.args.get('type', '').strip().lower() or 'all'
+        month = request.args.get('month', '').strip()
+        employee_id = request.args.get('employee', '').strip() or 'all'
+
+        # Get all employees
+        employees_ref = db.reference('users')
+        all_employees = employees_ref.get() or {}
+
+        # Prepare employee list for dropdown
+        employee_list = []
+        for phone, emp_data in all_employees.items():
+            if not isinstance(emp_data, dict):
+                continue
+            e_id = emp_data.get('employeeId', phone)
+            employee_list.append({
+                'id': e_id,
+                'name': emp_data.get('name') or 'Unknown'
+            })
+        employee_list.sort(key=lambda x: str(x.get('name') or '').lower())
+
+        selected_employee_name = 'All Employees'
+        if employee_id != 'all':
+            emp_info = get_employee_by_id(all_employees, employee_id)
+            selected_employee_name = emp_info.get('name') or employee_id
+
+        # 1. Attendance Summary
+        attendance_data = []
+        summary_ref = db.reference('attendanceSummary')
+        all_summaries = summary_ref.get() or {}
+        for emp_key, months in all_summaries.items():
+            if employee_id != 'all' and emp_key != employee_id:
+                continue
+            if isinstance(months, dict):
+                for m_key, summary in months.items():
+                    if month and month != 'all' and m_key != month:
+                        continue
+                    emp_data = get_employee_by_id(all_employees, emp_key)
+                    attendance_data.append({
+                        'employeeId': emp_key,
+                        'employeeName': emp_data.get('name', 'Unknown'),
+                        'employeeRole': emp_data.get('role', 'N/A'),
+                        'month': m_key,
+                        'totalWorkDays': safe_num(summary.get('totalWorkDays', 0)),
+                        'onTimeDays': safe_num(summary.get('onTimeDays', 0)),
+                        'lateStartDays': safe_num(summary.get('lateStartDays', 0)),
+                        'halfDays': safe_num(summary.get('halfDays', 0)),
+                        'averageLateMinutes': safe_num(summary.get('averageLateMinutes', 0))
+                    })
+        attendance_data.sort(key=lambda x: (str(x.get('month', '')), str(x.get('employeeName', '')).lower()), reverse=True)
+
+        # 2. Permissions & Leaves
+        permissions_data = []
+        all_perms = db.reference('permissions').get() or {}
+        for perm_id, perm in all_perms.items():
+            if not isinstance(perm, dict):
+                continue
+            emp_ref = perm.get('employeeId') or perm.get('phone') or perm.get('empPhone')
+            if employee_id != 'all' and emp_ref != employee_id:
+                continue
+            req_time = perm.get('requestedAt') or perm.get('timestamp') or perm.get('createdAt')
+            dt_norm = normalize_visit_datetime(req_time)
+            p_month = dt_norm.get('date', '')[:7] if dt_norm.get('date') != 'N/A' else ''
+            if not p_month and perm.get('date'):
+                p_month = str(perm.get('date'))[:7]
+            if month and month != 'all' and p_month and p_month != month:
+                continue
+            emp_data = get_employee_by_id(all_employees, emp_ref)
+            permissions_data.append({
+                'id': perm_id,
+                'employeeId': emp_ref or 'N/A',
+                'employeeName': emp_data.get('name', perm.get('employeeName', 'Unknown')),
+                'type': perm.get('type', perm.get('permissionType', 'N/A')),
+                'reason': perm.get('reason', 'N/A'),
+                'status': perm.get('status', 'PENDING'),
+                'date': dt_norm.get('date') if dt_norm.get('date') != 'N/A' else perm.get('date', 'N/A'),
+                'time': dt_norm.get('time') if dt_norm.get('time') != 'N/A' else perm.get('time', 'N/A'),
+                'startDate': perm.get('startDate', 'N/A'),
+                'endDate': perm.get('endDate', 'N/A'),
+                'approvedBy': perm.get('approvedBy', 'N/A')
+            })
+        permissions_data.sort(key=lambda x: str(x.get('date', '')), reverse=True)
+
+        # 3. Visits
+        visits_data = []
+        all_visits = read_firebase_path('visits') or db.reference('visits').get() or {}
+        for visit_id, visit in all_visits.items():
+            if not isinstance(visit, dict):
+                continue
+            emp_ref = get_employee_reference(visit) or visit.get('employeeId')
+            if employee_id != 'all' and emp_ref != employee_id:
+                continue
+            v_time = visit.get('createdAt') or visit.get('timestamp')
+            v_dt = normalize_visit_datetime(v_time)
+            v_month = v_dt.get('date', '')[:7] if v_dt.get('date') != 'N/A' else ''
+            if not v_month and visit.get('date'):
+                v_month = str(visit.get('date'))[:7]
+            if month and month != 'all' and v_month and v_month != month:
+                continue
+            emp_data = get_employee_by_id(all_employees, emp_ref)
+            visits_data.append({
+                'id': visit_id,
+                'employeeId': emp_ref or 'N/A',
+                'employeeName': emp_data.get('name', visit.get('employeeName', 'Unknown')),
+                'leadName': visit.get('leadName', 'N/A'),
+                'leadPhone': visit.get('leadPhone', 'N/A'),
+                'date': v_dt.get('date') if v_dt.get('date') != 'N/A' else visit.get('date', 'N/A'),
+                'time': v_dt.get('time') if v_dt.get('time') != 'N/A' else visit.get('time', 'N/A'),
+                'status': visit.get('status', 'COMPLETED'),
+                'notes': visit.get('notes', 'N/A')
+            })
+        visits_data.sort(key=lambda x: str(x.get('date', '')), reverse=True)
+
+        # 4. Sessions
+        sessions_data = []
+        all_sess = db.reference('sessions').get() or {}
+        for sess_id, sess in all_sess.items():
+            if not isinstance(sess, dict):
+                continue
+            emp_ref = get_employee_reference(sess) or sess.get('employeeId')
+            if employee_id != 'all' and emp_ref != employee_id:
+                continue
+            s_time = sess.get('startTime') or sess.get('createdAt')
+            s_dt = normalize_visit_datetime(s_time)
+            s_month = s_dt.get('date', '')[:7] if s_dt.get('date') != 'N/A' else ''
+            if not s_month and sess.get('date'):
+                s_month = str(sess.get('date'))[:7]
+            if month and month != 'all' and s_month and s_month != month:
+                continue
+            emp_data = get_employee_by_id(all_employees, emp_ref)
+            end_dt = normalize_visit_datetime(sess.get('endTime'))
+            sessions_data.append({
+                'id': sess_id,
+                'employeeId': emp_ref or 'N/A',
+                'employeeName': emp_data.get('name', sess.get('employeeName', 'Unknown')),
+                'workType': sess.get('workType', 'FIELD'),
+                'status': sess.get('status', 'CLOSED'),
+                'date': s_dt.get('date') if s_dt.get('date') != 'N/A' else sess.get('date', 'N/A'),
+                'startTime': s_dt.get('time') if s_dt.get('time') != 'N/A' else 'N/A',
+                'endTime': end_dt.get('time') if sess.get('endTime') else 'Active',
+                'workDurationMs': safe_num(sess.get('totalWorkTimeMs'), 0),
+                'breakDurationMs': safe_num(sess.get('totalBreakTimeMs'), 0)
+            })
+        sessions_data.sort(key=lambda x: str(x.get('date', '')), reverse=True)
+
+        # 5. Tasks
+        tasks_data = []
+        all_tasks = db.reference('tasks').get() or {}
+        for task_id, task in all_tasks.items():
+            if not isinstance(task, dict):
+                continue
+            emp_ref = task.get('assignedTo', '')
+            if employee_id != 'all' and emp_ref != employee_id:
+                continue
+            t_time = task.get('createdAt') or task.get('timestamp')
+            t_dt = normalize_visit_datetime(t_time)
+            t_month = t_dt.get('date', '')[:7] if t_dt.get('date') != 'N/A' else ''
+            if not t_month and task.get('dueDate'):
+                t_month = str(task.get('dueDate'))[:7]
+            if month and month != 'all' and t_month and t_month != month:
+                continue
+            emp_data = get_employee_by_id(all_employees, emp_ref)
+            tasks_data.append({
+                'id': task_id,
+                'title': task.get('title', 'Untitled Task'),
+                'employeeId': emp_ref or 'N/A',
+                'employeeName': emp_data.get('name', task.get('employeeName', 'Unknown')),
+                'type': task.get('type', 'field'),
+                'status': task.get('status', 'PENDING'),
+                'priority': task.get('priority', 'MEDIUM'),
+                'dueDate': task.get('dueDate', 'N/A'),
+                'createdAt': t_dt.get('date', 'N/A')
+            })
+        tasks_data.sort(key=lambda x: str(x.get('createdAt', '')), reverse=True)
+
+        # 6. Travel Expenses
+        expenses_data = []
+        all_exp = db.reference('travelExpenses').get() or {}
+        for exp_id, exp in all_exp.items():
+            if not isinstance(exp, dict):
+                continue
+            emp_ref = exp.get('employeeId', '')
+            if employee_id != 'all' and emp_ref != employee_id:
+                continue
+            exp_date = exp.get('date', '')
+            exp_month = exp_date[:7] if exp_date else ''
+            if not exp_month and exp.get('createdAt'):
+                exp_month = str(exp.get('createdAt'))[:7]
+            if month and month != 'all' and exp_month and exp_month != month:
+                continue
+            emp_data = get_employee_by_id(all_employees, emp_ref)
+            expenses_data.append({
+                'id': exp_id,
+                'employeeId': emp_ref or 'N/A',
+                'employeeName': emp_data.get('name', 'Unknown'),
+                'date': exp.get('date', 'N/A'),
+                'time': exp.get('time', 'N/A'),
+                'distance': safe_num(exp.get('distanceKm', exp.get('distance', 0))),
+                'rate': safe_num(exp.get('ratePerKm', exp.get('rate', 0))),
+                'amount': safe_num(exp.get('totalAmount', exp.get('amount', 0))),
+                'duration': safe_num(exp.get('durationMinutes', exp.get('duration', 0))),
+                'routePoints': safe_num(exp.get('routePoints', 0)),
+                'sessionId': exp.get('sessionId', 'N/A')
+            })
+        expenses_data.sort(key=lambda x: str(x.get('date', '')), reverse=True)
+
+        # 7. Field Measurements
+        measurements_data = []
+        all_meas = db.reference('fieldMeasurements').get() or db.reference('measurements').get() or {}
+        for meas_id, meas in all_meas.items():
+            if not isinstance(meas, dict):
+                continue
+            emp_ref = meas.get('employeeId', '')
+            if employee_id != 'all' and emp_ref != employee_id:
+                continue
+            m_date = meas.get('date', '')
+            m_month = m_date[:7] if m_date else ''
+            if not m_month and meas.get('createdAt'):
+                m_month = str(meas.get('createdAt'))[:7]
+            if month and month != 'all' and m_month and m_month != month:
+                continue
+            emp_data = get_employee_by_id(all_employees, emp_ref)
+            measurements_data.append({
+                'id': meas_id,
+                'employeeId': emp_ref or 'N/A',
+                'employeeName': emp_data.get('name', 'Unknown'),
+                'date': meas.get('date', 'N/A'),
+                'time': meas.get('time', 'N/A'),
+                'areaAcres': safe_num(meas.get('areaAcres', 0)),
+                'areaSqMeters': safe_num(meas.get('area', 0)),
+                'points': safe_num(meas.get('points', 0)),
+                'distance': safe_num(meas.get('distance', 0)),
+                'sessionId': meas.get('sessionId', 'N/A')
+            })
+        measurements_data.sort(key=lambda x: str(x.get('date', '')), reverse=True)
+
+        return render_template(
+            'report_print.html',
+            report_type=report_type,
+            month=month or 'all',
+            employee_id=employee_id,
+            selected_employee_name=selected_employee_name,
+            employees=employee_list,
+            attendance_data=attendance_data,
+            permissions_data=permissions_data,
+            visits_data=visits_data,
+            sessions_data=sessions_data,
+            tasks_data=tasks_data,
+            expenses_data=expenses_data,
+            measurements_data=measurements_data,
+            generated_at=datetime.now().strftime('%Y-%m-%d %I:%M %p')
+        )
+    except Exception as e:
+        flash(f'Error loading print report: {str(e)}', 'error')
+        return redirect(url_for('reports'))
 
 # ═══════════════════════════════════════════════════════════════════════════
 # API ENDPOINTS

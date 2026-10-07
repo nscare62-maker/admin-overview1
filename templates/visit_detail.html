@@ -162,66 +162,74 @@
     </div>
 
     <!-- Map View if points exist -->
-    {% if visit.routePoints %}
+    {% if visit.routePoints or (visit.latitude and visit.longitude) %}
     <div class="card mb-4">
-        <div class="card-header py-3">
-            <span class="fw-semibold"><i class="bi bi-map text-primary me-2"></i>Field Route &amp; Movement Map</span>
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <span class="fw-semibold"><i class="bi bi-geo-alt-fill text-primary me-2"></i>Field Location &amp; Route Map</span>
+            {% if visit.latitude and visit.longitude %}
+            <a href="https://www.google.com/maps?q={{ visit.latitude }},{{ visit.longitude }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size: 0.75rem;">
+                <i class="bi bi-box-arrow-up-right me-1"></i> Open Google Maps
+            </a>
+            {% endif %}
         </div>
         <div class="card-body p-0">
-            {% if azure_maps_key %}
             <div id="visit-map" style="height: 380px; width: 100%;"></div>
-            {% else %}
-            <div class="p-4 text-muted text-center">
-                Azure Maps is not configured. Add <code>AZURE_MAPS_SUBSCRIPTION_KEY</code> to display map routes.
-            </div>
-            {% endif %}
         </div>
     </div>
 
-    {% if azure_maps_key %}
-    <link rel="stylesheet" href="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.css" />
-    <script src="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const routePoints = {{ visit.routePoints|tojson }};
-        if (!routePoints || routePoints.length === 0) return;
+        const routePoints = {{ (visit.routePoints or [])|tojson }};
+        const visitLat = {{ visit.latitude|tojson }};
+        const visitLng = {{ visit.longitude|tojson }};
+        const mapContainer = document.getElementById('visit-map');
+        if (!mapContainer) return;
 
-        const map = new atlas.Map('visit-map', {
-            center: [routePoints[0].longitude, routePoints[0].latitude],
-            zoom: 14,
-            authOptions: {
-                authType: 'subscriptionKey',
-                subscriptionKey: '{{ azure_maps_key }}'
-            }
-        });
-
-        map.events.add('ready', function () {
-            const datasource = new atlas.source.DataSource();
-            map.sources.add(datasource);
-
-            const coordinates = routePoints.map(point => [point.longitude, point.latitude]);
-            if (coordinates.length > 1) {
-                datasource.add(new atlas.data.LineString(coordinates));
-                map.layers.add(new atlas.layer.LineLayer(datasource, null, {
-                    strokeColor: '#2563eb',
-                    strokeWidth: 4
-                }));
-            }
-
-            routePoints.forEach((point, index) => {
-                if (point.label === 'Employee movement') return;
-                const markerColor = index === 0 ? '#16a34a' : (index === routePoints.length - 1 ? '#dc2626' : '#2563eb');
-                const marker = new atlas.HtmlMarker({
-                    color: markerColor,
-                    text: String(index + 1),
-                    position: [point.longitude, point.latitude]
-                });
-                map.markers.add(marker);
+        let points = [];
+        if (Array.isArray(routePoints) && routePoints.length > 0) {
+            routePoints.forEach(p => {
+                const lat = Number(p.latitude);
+                const lng = Number(p.longitude);
+                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                    points.push({ lat, lng, label: p.label || 'Movement' });
+                }
             });
+        }
+        if (points.length === 0 && visitLat && visitLng) {
+            const vLat = Number(visitLat);
+            const vLng = Number(visitLng);
+            if (!isNaN(vLat) && !isNaN(vLng) && vLat !== 0 && vLng !== 0) {
+                points.push({ lat: vLat, lng: vLng, label: 'Visit Location' });
+            }
+        }
+
+        if (points.length === 0) {
+            mapContainer.innerHTML = '<div class="p-4 text-center text-muted">No GPS coordinates recorded for this visit.</div>';
+            return;
+        }
+
+        const map = L.map('visit-map').setView([points[0].lat, points[0].lng], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        if (points.length > 1) {
+            const latlngs = points.map(p => [p.lat, p.lng]);
+            const polyline = L.polyline(latlngs, { color: '#2563eb', weight: 4 }).addTo(map);
+            map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+        }
+
+        points.forEach((p, idx) => {
+            const marker = L.marker([p.lat, p.lng]).addTo(map);
+            marker.bindPopup(`<b>${p.label}</b><br>Lat: ${p.lat.toFixed(6)}<br>Lng: ${p.lng.toFixed(6)}`);
         });
+
+        setTimeout(() => { map.invalidateSize(); }, 300);
     });
     </script>
-    {% endif %}
     {% endif %}
 </div>
 {% endblock %}

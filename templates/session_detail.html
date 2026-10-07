@@ -1,52 +1,93 @@
 {% extends "base.html" %}
 {% block title %}Session Details - S2C Admin{% endblock %}
+
+{% block extra_css %}
+<!-- Leaflet CSS for Map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>
+    .photo-card-preview {
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border: 2px solid rgba(0,0,0,0.06);
+    }
+    .photo-card-preview:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.12) !important;
+    }
+    .avatar-circle-lg {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.4rem;
+        color: #fff;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        box-shadow: 0 4px 10px rgba(37,99,235,0.25);
+    }
+    #session-leaflet-map {
+        border-radius: 0 0 8px 8px;
+        z-index: 1;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1><i class="bi bi-clock-history"></i> Session Details</h1>
+        <h1><i class="bi bi-clock-history text-primary me-2"></i>Session Details</h1>
         <a href="{{ url_for('sessions') }}" class="btn btn-secondary">
-            <i class="bi bi-arrow-left"></i> Back to Sessions
+            <i class="bi bi-arrow-left me-1"></i> Back to Sessions
         </a>
     </div>
     
     <!-- Employee Info Card -->
     <div class="row g-4 mb-4">
         <div class="col-md-12">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-person"></i> Employee Information</h5>
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-person-badge me-2"></i> Employee Information</h5>
                 </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-3">
-                            <strong>Name:</strong> {{ session.employeeName }}
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Employee ID:</strong> <code>{{ session.employeeId }}</code>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Phone:</strong> {{ session.employeePhone }}
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Role:</strong> 
-                            {% if session.employeeRole == 'field_staff' %}
-                            <span class="badge bg-success">Field Staff</span>
-                            {% elif session.employeeRole == 'office_staff' %}
-                            <span class="badge bg-info">Office Staff</span>
+                <div class="card-body p-4">
+                    <div class="d-flex flex-column flex-md-row align-items-md-center gap-4 mb-3 pb-3 border-bottom">
+                        <div class="flex-shrink-0">
+                            {% if session.employeePhoto %}
+                            <img src="{{ session.employeePhoto }}" class="rounded-circle shadow-sm" style="width: 68px; height: 68px; object-fit: cover; border: 3px solid #3b82f6;" alt="{{ session.employeeName }}">
                             {% else %}
-                            <span class="badge bg-secondary">{{ session.employeeRole }}</span>
+                            <div class="avatar-circle-lg">
+                                {{ session.employeeInitials or 'EM' }}
+                            </div>
                             {% endif %}
                         </div>
-                        <div class="col-md-3">
-                            <strong>Work Type Selected:</strong>
+                        <div class="flex-grow-1">
+                            <h3 class="mb-1 fw-bold text-dark">{{ session.employeeName }}</h3>
+                            <div class="d-flex flex-wrap align-items-center gap-3 text-muted small">
+                                <span><i class="bi bi-hash"></i> Employee ID: <code class="fs-6">{{ session.employeeId }}</code></span>
+                                <span><i class="bi bi-telephone"></i> Phone: <strong>{{ session.employeePhone }}</strong></span>
+                                <span>
+                                    <i class="bi bi-shield-check"></i> Role:
+                                    {% if session.employeeRole == 'field_staff' %}
+                                    <span class="badge bg-success">Field Staff</span>
+                                    {% elif session.employeeRole == 'office_staff' %}
+                                    <span class="badge bg-info">Office Staff</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ session.employeeRole }}</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="text-md-end">
+                            <span class="text-muted d-block small mb-1">Work Type</span>
                             {% if session.workType == 'FIELD' %}
-                            <span class="badge bg-success"><i class="bi bi-geo-alt"></i> Field Work</span>
+                            <span class="badge bg-success fs-6 px-3 py-2"><i class="bi bi-geo-alt me-1"></i> Field Work</span>
                             {% elif session.workType == 'OFFICE' %}
-                            <span class="badge bg-info"><i class="bi bi-building"></i> Office Work</span>
+                            <span class="badge bg-info fs-6 px-3 py-2"><i class="bi bi-building me-1"></i> Office Work</span>
                             {% elif session.workType == 'FARM' %}
-                            <span class="badge bg-warning"><i class="bi bi-tree"></i> Farm Work</span>
+                            <span class="badge bg-warning fs-6 px-3 py-2"><i class="bi bi-tree me-1"></i> Farm Work</span>
                             {% else %}
-                            <span class="badge bg-secondary">{{ session.workType }}</span>
+                            <span class="badge bg-secondary fs-6 px-3 py-2">{{ session.workType }}</span>
                             {% endif %}
                         </div>
                     </div>
@@ -55,36 +96,17 @@
         </div>
     </div>
     
-    <!-- Session Info Cards -->
+    <!-- Session Metric Cards -->
     <div class="row g-4 mb-4">
         <div class="col-md-3">
-            <div class="card shadow border-start border-primary border-4">
+            <div class="card shadow-sm border-0 border-start border-primary border-4 h-100">
                 <div class="card-body">
-                    <h6 class="text-muted mb-1">Work Type</h6>
-                    <h4>
-                        {% if session.workType == 'FIELD' %}
-                        <span class="badge bg-success"><i class="bi bi-geo-alt"></i> Field</span>
-                        {% elif session.workType == 'OFFICE' %}
-                        <span class="badge bg-info"><i class="bi bi-building"></i> Office</span>
-                        {% elif session.workType == 'FARM' %}
-                        <span class="badge bg-warning"><i class="bi bi-tree"></i> Farm</span>
-                        {% else %}
-                        <span class="badge bg-secondary">{{ session.workType }}</span>
-                        {% endif %}
-                    </h4>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-3">
-            <div class="card shadow border-start border-success border-4">
-                <div class="card-body">
-                    <h6 class="text-muted mb-1">Status</h6>
-                    <h4>
+                    <h6 class="text-muted mb-1 small text-uppercase fw-semibold">Status</h6>
+                    <h4 class="mb-0">
                         {% if session.status == 'ACTIVE' %}
-                        <span class="badge bg-success"><i class="bi bi-play-circle"></i> Active</span>
+                        <span class="badge bg-success"><i class="bi bi-play-circle me-1"></i> Active</span>
                         {% else %}
-                        <span class="badge bg-secondary"><i class="bi bi-check-circle"></i> Closed</span>
+                        <span class="badge bg-secondary"><i class="bi bi-check-circle me-1"></i> Closed</span>
                         {% endif %}
                     </h4>
                 </div>
@@ -92,142 +114,153 @@
         </div>
         
         <div class="col-md-3">
-            <div class="card shadow border-start border-info border-4">
+            <div class="card shadow-sm border-0 border-start border-info border-4 h-100">
                 <div class="card-body">
-                    <h6 class="text-muted mb-1">Work Duration</h6>
-                    <h4>{{ session.totalWorkTimeMs|format_duration }}</h4>
+                    <h6 class="text-muted mb-1 small text-uppercase fw-semibold">Work Duration</h6>
+                    <h4 class="mb-0 fw-bold text-dark">{{ session.totalWorkTimeMs|format_duration }}</h4>
                 </div>
             </div>
         </div>
         
         <div class="col-md-3">
-            <div class="card shadow border-start border-warning border-4">
+            <div class="card shadow-sm border-0 border-start border-warning border-4 h-100">
                 <div class="card-body">
-                    <h6 class="text-muted mb-1">Break Duration</h6>
-                    <h4>{{ session.totalBreakTimeMs|format_duration }}</h4>
+                    <h6 class="text-muted mb-1 small text-uppercase fw-semibold">Break Duration</h6>
+                    <h4 class="mb-0 fw-bold text-secondary">{{ session.totalBreakTimeMs|format_duration }}</h4>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm border-0 border-start border-success border-4 h-100">
+                <div class="card-body">
+                    <h6 class="text-muted mb-1 small text-uppercase fw-semibold">Session Date</h6>
+                    <h4 class="mb-0 fw-bold text-dark"><i class="bi bi-calendar-event text-success me-1"></i> {{ session.date or session.startTime|timestamp_to_datetime|truncate(10, True, '') }}</h4>
                 </div>
             </div>
         </div>
     </div>
     
-    <!-- Start and End Details -->
+    <!-- Punch In (Start) and Punch Out (End) Cards -->
     <div class="row g-4 mb-4">
-        <!-- Start Details -->
+        <!-- Punch In Start Details -->
         <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="bi bi-play-circle"></i> Session Start</h5>
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-success text-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-play-circle-fill me-2"></i> Punch In (Session Start)</h5>
+                    <span class="badge bg-light text-success fw-bold">Punch-In</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4">
                     <div class="mb-3">
-                        <strong><i class="bi bi-clock"></i> Time:</strong><br>
-                        <span class="fs-5">{{ session.startTime|timestamp_to_datetime }}</span>
+                        <label class="text-muted small fw-semibold text-uppercase">Start Timestamp</label>
+                        <div class="fs-5 fw-bold text-dark"><i class="bi bi-clock me-1 text-success"></i> {{ session.startTime|timestamp_to_datetime }}</div>
                     </div>
                     
-                    {% if session.startLocation %}
                     <div class="mb-3">
-                        <strong><i class="bi bi-geo-alt"></i> Location:</strong><br>
-                        {% if session.startLocation.latitude is defined and session.startLocation.longitude is defined %}
-                            {% if session.startLocation.latitude != 0.0 and session.startLocation.longitude != 0.0 %}
-                                <span>Lat: {{ session.startLocation.latitude|format_coord(6) }}</span><br>
-                                <span>Lng: {{ session.startLocation.longitude|format_coord(6) }}</span><br>
-                                <a href="https://www.google.com/maps?q={{ session.startLocation.latitude }},{{ session.startLocation.longitude }}" 
-                                   target="_blank" class="btn btn-sm btn-outline-primary mt-2">
-                                    <i class="bi bi-map"></i> View on Google Maps
-                                </a>
-                            {% else %}
-                                <span class="text-warning"><i class="bi bi-exclamation-triangle"></i> Location not recorded (0.0, 0.0)</span>
-                            {% endif %}
+                        <label class="text-muted small fw-semibold text-uppercase">Punch-in GPS Location</label>
+                        {% if session.startLocation and session.startLocation.latitude and session.startLocation.latitude != 0.0 %}
+                            <div class="font-monospace text-secondary mb-1">
+                                Lat: {{ session.startLocation.latitude|format_coord(6) }}, Lng: {{ session.startLocation.longitude|format_coord(6) }}
+                            </div>
+                            <a href="https://www.google.com/maps?q={{ session.startLocation.latitude }},{{ session.startLocation.longitude }}" 
+                               target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> Open in Google Maps
+                            </a>
                         {% else %}
-                            <span class="text-muted">Location data not available</span>
+                            <div class="text-muted fst-italic small"><i class="bi bi-geo-slash me-1"></i> GPS coordinates not recorded</div>
                         {% endif %}
                     </div>
-                    {% else %}
-                    <div class="mb-3">
-                        <strong><i class="bi bi-geo-alt"></i> Location:</strong><br>
-                        <span class="text-muted">No start location recorded</span>
-                    </div>
-                    {% endif %}
                     
-                    {% if session.startPhoto %}
-                    <div class="mb-3">
-                        <strong><i class="bi bi-camera"></i> Start Photo:</strong><br>
-                        <a href="{{ session.startPhoto }}" target="_blank" rel="noopener" class="btn btn-success btn-sm mt-2">
-                            <i class="bi bi-image"></i> View Start Photo
-                        </a>
-                        <img src="{{ session.startPhoto }}" class="img-fluid rounded shadow d-block mt-2" alt="Start Photo" style="max-height: 400px; max-width: 100%; object-fit: contain;">
+                    <!-- Punch-In Photo -->
+                    <div class="mt-4 pt-3 border-top">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="fw-bold text-dark mb-0"><i class="bi bi-camera-fill text-success me-1"></i> Punch-in Verification Photo</label>
+                            {% if session.startPhoto %}
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="openPhotoModal('{{ session.startPhoto }}', 'Punch In Photo - {{ session.employeeName }}', '{{ session.startTime|timestamp_to_datetime }}')">
+                                <i class="bi bi-zoom-in me-1"></i> View Full Photo
+                            </button>
+                            {% endif %}
+                        </div>
+
+                        {% if session.startPhoto %}
+                        <div class="photo-card-preview text-center p-2 rounded bg-light" onclick="openPhotoModal('{{ session.startPhoto }}', 'Punch In Photo - {{ session.employeeName }}', '{{ session.startTime|timestamp_to_datetime }}')" title="Touch or click to view full size">
+                            <img src="{{ session.startPhoto }}" class="img-fluid rounded shadow-sm" alt="Punch In Photo" style="max-height: 280px; width: auto; object-fit: contain;">
+                            <div class="text-muted small mt-2"><i class="bi bi-hand-index-thumb"></i> Click or touch to view full photo</div>
+                        </div>
+                        {% elif session.startPhotoUri and (session.startPhotoUri.startswith('/data/') or session.startPhotoUri.startswith('file://') or session.startPhotoUri.startswith('content://')) %}
+                        <div class="alert alert-warning py-3 mb-0 small">
+                            <i class="bi bi-phone me-1"></i> Punch-in photo is saved in device local storage (<code>{{ session.startPhotoUri.split('/')[-1] }}</code>).
+                        </div>
+                        {% else %}
+                        <div class="alert alert-secondary py-3 mb-0 small text-center text-muted">
+                            <i class="bi bi-camera-slash me-1"></i> No punch-in verification photo attached
+                        </div>
+                        {% endif %}
                     </div>
-                    {% elif session.startPhotoUri and (session.startPhotoUri.startswith('/data/') or session.startPhotoUri.startswith('file://') or session.startPhotoUri.startswith('content://')) %}
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i> Punch-in photo exists on the device but cannot be displayed in the web dashboard. Upload it to Firebase to view it here.
-                    </div>
-                    {% else %}
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i> No start photo available
-                    </div>
-                    {% endif %}
                 </div>
             </div>
         </div>
         
-        <!-- End Details -->
+        <!-- Punch Out End Details -->
         <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0"><i class="bi bi-stop-circle"></i> Session End</h5>
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-danger text-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-stop-circle-fill me-2"></i> Punch Out (Session End)</h5>
+                    <span class="badge bg-light text-danger fw-bold">Punch-Out</span>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4">
                     {% if session.endTime %}
                     <div class="mb-3">
-                        <strong><i class="bi bi-clock"></i> Time:</strong><br>
-                        <span class="fs-5">{{ session.endTime|timestamp_to_datetime }}</span>
+                        <label class="text-muted small fw-semibold text-uppercase">End Timestamp</label>
+                        <div class="fs-5 fw-bold text-dark"><i class="bi bi-clock me-1 text-danger"></i> {{ session.endTime|timestamp_to_datetime }}</div>
                     </div>
                     
-                    {% if session.endLocation %}
                     <div class="mb-3">
-                        <strong><i class="bi bi-geo-alt"></i> Location:</strong><br>
-                        {% if session.endLocation.latitude is defined and session.endLocation.longitude is defined %}
-                            {% if session.endLocation.latitude != 0.0 and session.endLocation.longitude != 0.0 %}
-                                <span>Lat: {{ session.endLocation.latitude|format_coord(6) }}</span><br>
-                                <span>Lng: {{ session.endLocation.longitude|format_coord(6) }}</span><br>
-                                <a href="https://www.google.com/maps?q={{ session.endLocation.latitude }},{{ session.endLocation.longitude }}" 
-                                   target="_blank" class="btn btn-sm btn-outline-primary mt-2">
-                                    <i class="bi bi-map"></i> View on Google Maps
-                                </a>
-                            {% else %}
-                                <span class="text-warning"><i class="bi bi-exclamation-triangle"></i> Location not recorded (0.0, 0.0)</span>
-                            {% endif %}
+                        <label class="text-muted small fw-semibold text-uppercase">Punch-out GPS Location</label>
+                        {% if session.endLocation and session.endLocation.latitude and session.endLocation.latitude != 0.0 %}
+                            <div class="font-monospace text-secondary mb-1">
+                                Lat: {{ session.endLocation.latitude|format_coord(6) }}, Lng: {{ session.endLocation.longitude|format_coord(6) }}
+                            </div>
+                            <a href="https://www.google.com/maps?q={{ session.endLocation.latitude }},{{ session.endLocation.longitude }}" 
+                               target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> Open in Google Maps
+                            </a>
                         {% else %}
-                            <span class="text-muted">Location data not available</span>
+                            <div class="text-muted fst-italic small"><i class="bi bi-geo-slash me-1"></i> GPS coordinates not recorded</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Punch-Out Photo -->
+                    <div class="mt-4 pt-3 border-top">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="fw-bold text-dark mb-0"><i class="bi bi-camera-fill text-danger me-1"></i> Punch-out Verification Photo</label>
+                            {% if session.endPhoto %}
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="openPhotoModal('{{ session.endPhoto }}', 'Punch Out Photo - {{ session.employeeName }}', '{{ session.endTime|timestamp_to_datetime }}')">
+                                <i class="bi bi-zoom-in me-1"></i> View Full Photo
+                            </button>
+                            {% endif %}
+                        </div>
+
+                        {% if session.endPhoto %}
+                        <div class="photo-card-preview text-center p-2 rounded bg-light" onclick="openPhotoModal('{{ session.endPhoto }}', 'Punch Out Photo - {{ session.employeeName }}', '{{ session.endTime|timestamp_to_datetime }}')" title="Touch or click to view full size">
+                            <img src="{{ session.endPhoto }}" class="img-fluid rounded shadow-sm" alt="Punch Out Photo" style="max-height: 280px; width: auto; object-fit: contain;">
+                            <div class="text-muted small mt-2"><i class="bi bi-hand-index-thumb"></i> Click or touch to view full photo</div>
+                        </div>
+                        {% elif session.endPhotoUri and (session.endPhotoUri.startswith('/data/') or session.endPhotoUri.startswith('file://') or session.endPhotoUri.startswith('content://')) %}
+                        <div class="alert alert-warning py-3 mb-0 small">
+                            <i class="bi bi-phone me-1"></i> Punch-out photo is saved in device local storage (<code>{{ session.endPhotoUri.split('/')[-1] }}</code>).
+                        </div>
+                        {% else %}
+                        <div class="alert alert-secondary py-3 mb-0 small text-center text-muted">
+                            <i class="bi bi-camera-slash me-1"></i> No punch-out verification photo attached
+                        </div>
                         {% endif %}
                     </div>
                     {% else %}
-                    <div class="mb-3">
-                        <strong><i class="bi bi-geo-alt"></i> Location:</strong><br>
-                        <span class="text-muted">No end location recorded</span>
-                    </div>
-                    {% endif %}
-                    
-                    {% if session.endPhoto %}
-                    <div class="mb-3">
-                        <strong><i class="bi bi-camera"></i> End Photo:</strong><br>
-                        <a href="{{ session.endPhoto }}" target="_blank" rel="noopener" class="btn btn-danger btn-sm mt-2">
-                            <i class="bi bi-image"></i> View End Photo
-                        </a>
-                        <img src="{{ session.endPhoto }}" class="img-fluid rounded shadow d-block mt-2" alt="End Photo" style="max-height: 400px; max-width: 100%; object-fit: contain;">
-                    </div>
-                    {% elif session.endPhotoUri and (session.endPhotoUri.startswith('/data/') or session.endPhotoUri.startswith('file://') or session.endPhotoUri.startswith('content://')) %}
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i> Punch-out photo exists on the device but cannot be displayed in the web dashboard. Upload it to Firebase to view it here.
-                    </div>
-                    {% else %}
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i> No end photo available
-                    </div>
-                    {% endif %}
-                    {% else %}
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> Session is still active - no end time yet
+                    <div class="alert alert-info py-4 text-center my-4">
+                        <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                        <strong>Work Session is Active</strong>
+                        <p class="mb-0 small text-muted">The employee has not punched out yet.</p>
                     </div>
                     {% endif %}
                 </div>
@@ -235,93 +268,64 @@
         </div>
     </div>
     
-    <!-- Map View -->
-    {% if session.routePoints %}
+    <!-- Employee Location & Route Map View (Leaflet + OpenStreetMap) -->
     <div class="row g-4 mb-4">
         <div class="col-md-12">
-            <div class="card shadow">
-                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="bi bi-map"></i> Worker Travel During Working Time</h5>
-                    <span class="badge bg-light text-dark">{{ session.routePoints|length }} recorded points</span>
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-dark text-white py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-geo-alt-fill text-info me-2"></i> Employee Location & Travel Route Map</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        {% if session.routePoints %}
+                        <span class="badge bg-info text-dark">{{ session.routePoints|length }} Recorded Waypoints</span>
+                        {% endif %}
+                        {% if session.startLocation and session.startLocation.latitude and session.startLocation.latitude != 0.0 %}
+                        <a href="https://www.google.com/maps?q={{ session.startLocation.latitude }},{{ session.startLocation.longitude }}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-light py-1 px-2" style="font-size: 0.785rem;">
+                            <i class="bi bi-box-arrow-up-right me-1"></i> Open Google Maps
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="card-body">
-                    {% if azure_maps_key %}
-                    <div id="session-map" style="height: 500px; width: 100%;"></div>
-                    {% else %}
-                    <div class="alert alert-warning mb-0">Azure Maps is not configured. Add AZURE_MAPS_SUBSCRIPTION_KEY to the environment.</div>
-                    {% endif %}
+                <div class="card-body p-0">
+                    <div id="session-leaflet-map" style="height: 480px; width: 100%;"></div>
+                </div>
+                <div class="card-footer bg-light py-2 px-3 d-flex flex-wrap align-items-center justify-content-between gap-2 small text-muted">
+                    <div class="d-flex align-items-center gap-3">
+                        <span><span class="badge bg-success me-1">S</span> Punch In Start</span>
+                        <span><span class="badge bg-danger me-1">E</span> Punch Out End</span>
+                        <span><span class="badge bg-primary me-1">&bull;</span> Route Movement</span>
+                    </div>
+                    <span id="mapStatusText">Loading OpenStreetMap tiles...</span>
                 </div>
             </div>
         </div>
     </div>
-    {% if azure_maps_key %}
-    <link rel="stylesheet" href="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.css" />
-    <script src="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js"></script>
-    <script>
-        var routePoints = {{ session.routePoints|tojson }};
-        var map = new atlas.Map('session-map', {
-            center: [routePoints[0].longitude, routePoints[0].latitude],
-            zoom: 13,
-            view: 'Auto',
-            authOptions: {
-                authType: 'subscriptionKey',
-                subscriptionKey: {{ azure_maps_key|tojson }}
-            }
-        });
-
-        map.events.add('ready', function () {
-            var dataSource = new atlas.source.DataSource();
-            map.sources.add(dataSource);
-            if (routePoints.length > 1) {
-                dataSource.add(new atlas.data.Feature(new atlas.data.LineString(
-                    routePoints.map(function (point) { return [point.longitude, point.latitude]; })
-                )));
-                map.layers.add(new atlas.layer.LineLayer(dataSource, null, {
-                    strokeColor: '#1565C0', strokeWidth: 5, lineJoin: 'round', lineCap: 'round'
-                }));
-            }
-
-            routePoints.forEach(function (point, index) {
-                if (point.label === 'Employee movement') return;
-                map.markers.add(new atlas.HtmlMarker({
-                    position: [point.longitude, point.latitude],
-                    color: point.label === 'Work started' ? '#198754' : '#dc3545',
-                    text: index === 0 ? 'S' : 'E'
-                }));
-            });
-
-            map.setCamera({ bounds: atlas.data.BoundingBox.fromPositions(
-                routePoints.map(function (point) { return [point.longitude, point.latitude]; })
-            ), padding: 50 });
-        });
-    </script>
-    {% endif %}
-    {% endif %}
     
-    <!-- Additional Session Data -->
-    <div class="row g-4">
+    <!-- Additional Session Details -->
+    <div class="row g-4 mb-4">
         <div class="col-md-12">
-            <div class="card shadow">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Additional Information</h5>
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-secondary text-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i> Technical & Record Metadata</h5>
                 </div>
-                <div class="card-body">
-                    <div class="row">
+                <div class="card-body p-4">
+                    <div class="row g-3">
                         <div class="col-md-4">
-                            <strong>Session ID:</strong><br>
-                            <code>{{ session.id }}</code>
+                            <span class="text-muted small text-uppercase d-block">Session Record ID</span>
+                            <code class="fs-6">{{ session.id }}</code>
                         </div>
                         <div class="col-md-4">
-                            <strong>Created At:</strong><br>
-                            {{ session.createdAt|timestamp_to_datetime if session.createdAt else 'N/A' }}
+                            <span class="text-muted small text-uppercase d-block">Creation Timestamp</span>
+                            <span class="fw-medium text-dark">{{ session.createdAt|timestamp_to_datetime if session.createdAt else 'N/A' }}</span>
                         </div>
                         <div class="col-md-4">
-                            <strong>Total Duration:</strong><br>
-                            {% if session.endTime %}
-                            {{ ((session.endTime - session.startTime) / 1000 / 60)|round|int }} minutes
-                            {% else %}
-                            Ongoing
-                            {% endif %}
+                            <span class="text-muted small text-uppercase d-block">Total Working Time</span>
+                            <span class="fw-bold text-primary">
+                                {% if session.endTime and session.startTime %}
+                                {{ ((session.endTime - session.startTime) / 1000 / 60)|round|int }} minutes
+                                {% else %}
+                                Active / Ongoing
+                                {% endif %}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -329,4 +333,175 @@
         </div>
     </div>
 </div>
+
+<!-- Photo Viewer Lightbox Modal -->
+<div class="modal fade" id="photoLightboxModal" tabindex="-1" aria-labelledby="photoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header bg-dark text-white py-2">
+                <h5 class="modal-title fs-6" id="photoModalLabel"><i class="bi bi-image me-2"></i> Employee Punch Photo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center p-2 bg-black">
+                <img id="lightboxPhotoImg" src="" class="img-fluid rounded" style="max-height: 75vh; width: auto; object-fit: contain;" alt="Employee Photo">
+            </div>
+            <div class="modal-footer bg-light py-2 d-flex justify-content-between align-items-center">
+                <span class="text-muted small fw-medium" id="photoModalSubtitle"></span>
+                <div>
+                    <a id="photoDownloadBtn" href="#" download="employee_punch_photo.jpg" class="btn btn-sm btn-primary">
+                        <i class="bi bi-download me-1"></i> Download Photo
+                    </a>
+                    <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Leaflet JS for Map rendering -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+// Interactive Photo Modal Handler
+function openPhotoModal(src, title, subtitle) {
+    if (!src) return;
+    document.getElementById('lightboxPhotoImg').src = src;
+    document.getElementById('photoModalLabel').innerHTML = '<i class="bi bi-image me-2"></i> ' + (title || 'Employee Verification Photo');
+    document.getElementById('photoModalSubtitle').textContent = subtitle ? ('Recorded at: ' + subtitle) : '';
+    document.getElementById('photoDownloadBtn').href = src;
+    var modal = new bootstrap.Modal(document.getElementById('photoLightboxModal'));
+    modal.show();
+}
+
+// Leaflet Map Initialization
+document.addEventListener('DOMContentLoaded', function () {
+    const mapContainer = document.getElementById('session-leaflet-map');
+    const statusText = document.getElementById('mapStatusText');
+    if (!mapContainer) return;
+
+    const rawRoutePoints = {{ session.routePoints|tojson }};
+    const startLoc = {{ (session.startLocation or {})|tojson }};
+    const endLoc = {{ (session.endLocation or {})|tojson }};
+
+    let points = [];
+
+    // Parse route points if available
+    if (Array.isArray(rawRoutePoints) && rawRoutePoints.length > 0) {
+        rawRoutePoints.forEach(p => {
+            const lat = Number(p.latitude);
+            const lng = Number(p.longitude);
+            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                points.push({
+                    lat: lat,
+                    lng: lng,
+                    label: p.label || 'Movement',
+                    time: p.timestamp || ''
+                });
+            }
+        });
+    }
+
+    // Fallback to startLocation/endLocation if routePoints was empty or single
+    if (points.length === 0) {
+        if (startLoc && startLoc.latitude && startLoc.longitude) {
+            const sLat = Number(startLoc.latitude);
+            const sLng = Number(startLoc.longitude);
+            if (!isNaN(sLat) && !isNaN(sLng) && sLat !== 0 && sLng !== 0) {
+                points.push({
+                    lat: sLat,
+                    lng: sLng,
+                    label: 'Punch In (Start)',
+                    time: '{{ session.startTime|timestamp_to_datetime }}'
+                });
+            }
+        }
+        if (endLoc && endLoc.latitude && endLoc.longitude) {
+            const eLat = Number(endLoc.latitude);
+            const eLng = Number(endLoc.longitude);
+            if (!isNaN(eLat) && !isNaN(eLng) && eLat !== 0 && eLng !== 0) {
+                points.push({
+                    lat: eLat,
+                    lng: eLng,
+                    label: 'Punch Out (End)',
+                    time: '{{ session.endTime|timestamp_to_datetime }}'
+                });
+            }
+        }
+    }
+
+    if (points.length === 0) {
+        mapContainer.innerHTML = '<div class="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-muted"><i class="bi bi-geo-slash fs-1 mb-2 text-secondary"></i><p class="mb-0 fw-medium">No GPS coordinates recorded for this session.</p></div>';
+        if (statusText) statusText.textContent = 'GPS location unavailable for this session';
+        return;
+    }
+
+    // Initialize Leaflet Map
+    const map = L.map('session-leaflet-map', {
+        zoomControl: true,
+        scrollWheelZoom: true
+    }).setView([points[0].lat, points[0].lng], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Custom Icons
+    const startIcon = L.divIcon({
+        className: 'custom-start-marker',
+        html: '<div style="background:#16a34a;color:white;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:3px solid white;box-shadow:0 3px 8px rgba(0,0,0,0.35);font-size:15px;">S</div>',
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+    });
+
+    const endIcon = L.divIcon({
+        className: 'custom-end-marker',
+        html: '<div style="background:#dc2626;color:white;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;border:3px solid white;box-shadow:0 3px 8px rgba(0,0,0,0.35);font-size:15px;">E</div>',
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+    });
+
+    const moveIcon = L.divIcon({
+        className: 'custom-move-marker',
+        html: '<div style="background:#2563eb;color:white;width:12px;height:12px;border-radius:50%;border:2px solid white;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+        iconSize: [12, 12],
+        iconAnchor: [6, 6]
+    });
+
+    // Draw route polyline if more than 1 point
+    if (points.length > 1) {
+        const latlngs = points.map(p => [p.lat, p.lng]);
+        const polyline = L.polyline(latlngs, {
+            color: '#2563eb',
+            weight: 5,
+            opacity: 0.85,
+            smoothFactor: 1
+        }).addTo(map);
+
+        map.fitBounds(polyline.getBounds(), { padding: [50, 50], maxZoom: 16 });
+    } else {
+        map.setView([points[0].lat, points[0].lng], 15);
+    }
+
+    // Add Markers
+    points.forEach((p, idx) => {
+        let marker;
+        if (idx === 0) {
+            marker = L.marker([p.lat, p.lng], { icon: startIcon }).addTo(map);
+            marker.bindPopup(`<b><i class="bi bi-play-circle text-success me-1"></i> Punch In (Work Started)</b><br>Lat: ${p.lat.toFixed(6)}<br>Lng: ${p.lng.toFixed(6)}`);
+        } else if (idx === points.length - 1 && points.length > 1) {
+            marker = L.marker([p.lat, p.lng], { icon: endIcon }).addTo(map);
+            marker.bindPopup(`<b><i class="bi bi-stop-circle text-danger me-1"></i> Punch Out (Work Ended)</b><br>Lat: ${p.lat.toFixed(6)}<br>Lng: ${p.lng.toFixed(6)}`);
+        } else {
+            marker = L.marker([p.lat, p.lng], { icon: moveIcon }).addTo(map);
+            marker.bindPopup(`<b>Movement Point #${idx}</b><br>Lat: ${p.lat.toFixed(6)}<br>Lng: ${p.lng.toFixed(6)}`);
+        }
+    });
+
+    if (statusText) statusText.textContent = `${points.length} GPS waypoint(s) plotted successfully`;
+
+    setTimeout(() => { map.invalidateSize(); }, 400);
+});
+</script>
 {% endblock %}
