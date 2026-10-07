@@ -225,6 +225,18 @@ def load_session_photo(session_id, photo_type, session_data=None):
         if photo:
             return photo
 
+    # Also check candidate direct keys under session_photos
+    if session_id:
+        for candidate_key in (f'{session_id}_{photo_type}', session_id):
+            try:
+                candidate_data = db.reference(f'session_photos/{candidate_key}').get()
+                if candidate_data:
+                    photo = normalize_photo(candidate_data)
+                    if photo:
+                        return photo
+            except Exception:
+                pass
+
     return None
 
 def has_stored_photo(value):

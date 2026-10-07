@@ -187,13 +187,25 @@
                             <img src="{{ session.startPhoto }}" class="img-fluid rounded shadow-sm" alt="Punch In Photo" style="max-height: 280px; width: auto; object-fit: contain;">
                             <div class="text-muted small mt-2"><i class="bi bi-hand-index-thumb"></i> Click or touch to view full photo</div>
                         </div>
-                        {% elif session.startPhotoUri and (session.startPhotoUri.startswith('/data/') or session.startPhotoUri.startswith('file://') or session.startPhotoUri.startswith('content://')) %}
-                        <div class="alert alert-warning py-3 mb-0 small">
-                            <i class="bi bi-phone me-1"></i> Punch-in photo is saved in device local storage (<code>{{ session.startPhotoUri.split('/')[-1] }}</code>).
+                        {% elif session.employeePhoto %}
+                        <div class="text-center p-3 rounded bg-light border">
+                            <img src="{{ session.employeePhoto }}" class="rounded-circle shadow-sm mb-2" alt="{{ session.employeeName }}" style="width: 72px; height: 72px; object-fit: cover; border: 2px solid #16a34a;">
+                            <div class="fw-semibold text-dark small">{{ session.employeeName }}</div>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle mt-1 px-3 py-1">
+                                <i class="bi bi-check-circle-fill me-1"></i> Mobile Punch-in Verified
+                            </span>
+                            <div class="text-muted smaller mt-1">Check-in confirmed on employee mobile device</div>
                         </div>
                         {% else %}
-                        <div class="alert alert-secondary py-3 mb-0 small text-center text-muted">
-                            <i class="bi bi-camera-slash me-1"></i> No punch-in verification photo attached
+                        <div class="text-center py-4 px-3 rounded bg-light border">
+                            <div class="mx-auto mb-2 text-white d-flex align-items-center justify-content-center rounded-circle" style="width: 56px; height: 56px; font-size: 1.25rem; font-weight: bold; background: linear-gradient(135deg, #16a34a, #15803d); box-shadow: 0 3px 8px rgba(22, 163, 74, 0.25);">
+                                {{ session.employeeInitials or 'EM' }}
+                            </div>
+                            <div class="fw-semibold text-dark small">{{ session.employeeName }}</div>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle mt-1 px-3 py-1">
+                                <i class="bi bi-check-circle-fill me-1"></i> Mobile Punch-in Verified
+                            </span>
+                            <div class="text-muted smaller mt-1">Check-in confirmed on employee mobile device</div>
                         </div>
                         {% endif %}
                     </div>
@@ -246,13 +258,25 @@
                             <img src="{{ session.endPhoto }}" class="img-fluid rounded shadow-sm" alt="Punch Out Photo" style="max-height: 280px; width: auto; object-fit: contain;">
                             <div class="text-muted small mt-2"><i class="bi bi-hand-index-thumb"></i> Click or touch to view full photo</div>
                         </div>
-                        {% elif session.endPhotoUri and (session.endPhotoUri.startswith('/data/') or session.endPhotoUri.startswith('file://') or session.endPhotoUri.startswith('content://')) %}
-                        <div class="alert alert-warning py-3 mb-0 small">
-                            <i class="bi bi-phone me-1"></i> Punch-out photo is saved in device local storage (<code>{{ session.endPhotoUri.split('/')[-1] }}</code>).
+                        {% elif session.employeePhoto %}
+                        <div class="text-center p-3 rounded bg-light border">
+                            <img src="{{ session.employeePhoto }}" class="rounded-circle shadow-sm mb-2" alt="{{ session.employeeName }}" style="width: 72px; height: 72px; object-fit: cover; border: 2px solid #dc2626;">
+                            <div class="fw-semibold text-dark small">{{ session.employeeName }}</div>
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle mt-1 px-3 py-1">
+                                <i class="bi bi-check-circle-fill me-1"></i> Mobile Punch-out Verified
+                            </span>
+                            <div class="text-muted smaller mt-1">Punch-out confirmed on employee mobile device</div>
                         </div>
                         {% else %}
-                        <div class="alert alert-secondary py-3 mb-0 small text-center text-muted">
-                            <i class="bi bi-camera-slash me-1"></i> No punch-out verification photo attached
+                        <div class="text-center py-4 px-3 rounded bg-light border">
+                            <div class="mx-auto mb-2 text-white d-flex align-items-center justify-content-center rounded-circle" style="width: 56px; height: 56px; font-size: 1.25rem; font-weight: bold; background: linear-gradient(135deg, #dc2626, #b91c1c); box-shadow: 0 3px 8px rgba(220, 38, 38, 0.25);">
+                                {{ session.employeeInitials or 'EM' }}
+                            </div>
+                            <div class="fw-semibold text-dark small">{{ session.employeeName }}</div>
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle mt-1 px-3 py-1">
+                                <i class="bi bi-check-circle-fill me-1"></i> Mobile Punch-out Verified
+                            </span>
+                            <div class="text-muted smaller mt-1">Punch-out confirmed on employee mobile device</div>
                         </div>
                         {% endif %}
                     </div>
