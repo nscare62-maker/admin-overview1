@@ -135,66 +135,27 @@
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <span class="fw-semibold"><i class="bi bi-camera text-primary me-2"></i>Verification Photos</span>
+                    <span class="fw-semibold"><i class="bi bi-camera text-primary me-2"></i>Visit Photo</span>
+                    {% if visit.photo %}
+                    <span class="badge badge-subtle-success"><i class="bi bi-check-circle me-1"></i>Photo Verified</span>
+                    {% endif %}
                 </div>
                 <div class="card-body">
-                    <!-- Photo Selection Buttons -->
-                    <div class="btn-group mb-3 w-100" role="group" aria-label="Work photo selection">
-                        {% if visit.photo %}
-                        <button type="button" class="btn btn-sm btn-outline-primary active" data-photo-target="visit-photo-panel" aria-pressed="true">
-                            <i class="bi bi-camera-fill me-1"></i> Visit Photo
-                        </button>
-                        {% endif %}
-                        <button type="button" class="btn btn-sm btn-outline-primary {{ 'active' if not visit.photo else '' }}" data-photo-target="start-work-photo" aria-pressed="{{ 'true' if not visit.photo else 'false' }}">
-                            <i class="bi bi-play-circle me-1"></i> Clock-In Photo
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" data-photo-target="end-work-photo" aria-pressed="false">
-                            <i class="bi bi-stop-circle me-1"></i> Clock-Out Photo
-                        </button>
-                    </div>
-
-                    <!-- Visit Photo Panel -->
                     {% if visit.photo %}
-                    <div id="visit-photo-panel" class="work-photo-panel">
-                        <div class="visit-photo-container">
-                            <img src="{{ visit.photo }}" 
-                                 alt="Visit Verification Photo" 
-                                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'text-center text-muted p-4\'><i class=\'bi bi-image fs-1 d-block mb-2\'></i>Photo could not be loaded</div>';">
-                        </div>
+                    <div class="visit-photo-container text-center">
+                        <img src="{{ visit.photo }}" 
+                             alt="Visit Verification Photo" 
+                             class="img-fluid rounded shadow-sm"
+                             style="max-height: 420px; object-fit: contain; width: 100%;"
+                             onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'text-center text-muted p-4\'><i class=\'bi bi-image fs-1 d-block mb-2\'></i>Photo could not be loaded</div>';">
+                    </div>
+                    {% else %}
+                    <div class="p-5 text-center bg-light rounded text-muted">
+                        <i class="bi bi-camera-slash fs-1 d-block mb-2 text-muted"></i>
+                        <div class="fw-medium text-dark mb-1">No Visit Photo Attached</div>
+                        <small>No field verification photo was captured for this visit.</small>
                     </div>
                     {% endif %}
-
-                    <!-- Start of Work Photo Panel -->
-                    <div id="start-work-photo" class="work-photo-panel {{ 'd-none' if visit.photo else '' }}">
-                        {% if visit.startPhoto %}
-                        <div class="visit-photo-container">
-                            <img src="{{ visit.startPhoto }}" 
-                                 alt="Start of work verification"
-                                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'text-center text-muted p-4\'><i class=\'bi bi-image fs-1 d-block mb-2\'></i>Start photo unavailable</div>';">
-                        </div>
-                        {% else %}
-                        <div class="p-4 text-center bg-light rounded text-muted">
-                            <i class="bi bi-camera-slash fs-2 d-block mb-2"></i>
-                            No clock-in photo available for this session.
-                        </div>
-                        {% endif %}
-                    </div>
-
-                    <!-- End of Work Photo Panel -->
-                    <div id="end-work-photo" class="work-photo-panel d-none">
-                        {% if visit.endPhoto %}
-                        <div class="visit-photo-container">
-                            <img src="{{ visit.endPhoto }}" 
-                                 alt="End of work verification"
-                                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'text-center text-muted p-4\'><i class=\'bi bi-image fs-1 d-block mb-2\'></i>End photo unavailable</div>';">
-                        </div>
-                        {% else %}
-                        <div class="p-4 text-center bg-light rounded text-muted">
-                            <i class="bi bi-camera-slash fs-2 d-block mb-2"></i>
-                            No clock-out photo available for this session.
-                        </div>
-                        {% endif %}
-                    </div>
                 </div>
             </div>
         </div>
@@ -266,22 +227,4 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Work Photo Tab Switcher
-    document.querySelectorAll('[data-photo-target]').forEach(button => {
-        button.addEventListener('click', function () {
-            document.querySelectorAll('[data-photo-target]').forEach(b => {
-                const isActive = b === button;
-                b.classList.toggle('active', isActive);
-                b.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-            });
-
-            document.querySelectorAll('.work-photo-panel').forEach(panel => {
-                panel.classList.toggle('d-none', panel.id !== button.dataset.photoTarget);
-            });
-        });
-    });
-});
-</script>
 {% endblock %}

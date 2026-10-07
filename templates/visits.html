@@ -12,7 +12,7 @@
         </div>
         <div class="d-flex gap-2 align-items-center">
             <span class="badge badge-subtle-neutral px-3 py-2">
-                Total: {{ visits|length }}
+                {{ visits|length }} Visit{% if visits|length != 1 %}s{% endif %}
             </span>
         </div>
     </div>
@@ -30,15 +30,20 @@
                            id="visitDate" 
                            name="date" 
                            class="form-control" 
-                           value="{{ date_filter if date_filter != 'all' else '' }}">
+                           value="{{ date_filter if date_filter != 'all' else '' }}"
+                           onchange="document.getElementById('visitsFilterForm').submit();"
+                           title="Select date to filter visits">
                 </div>
 
                 <!-- Employee Filter -->
-                <div class="col-sm-6 col-md-3">
+                <div class="col-sm-6 col-md-4">
                     <label for="visitEmployee" class="form-label text-muted fw-medium" style="font-size: 0.785rem;">
                         <i class="bi bi-person me-1"></i> Employee
                     </label>
-                    <select id="visitEmployee" name="employee" class="form-select">
+                    <select id="visitEmployee" 
+                            name="employee" 
+                            class="form-select"
+                            onchange="document.getElementById('visitsFilterForm').submit();">
                         <option value="all" {{ 'selected' if employee_filter == 'all' else '' }}>All Employees</option>
                         {% for emp in employees %}
                         <option value="{{ emp.id }}" {{ 'selected' if employee_filter == emp.id else '' }}>
@@ -49,19 +54,16 @@
                 </div>
 
                 <!-- Quick Search Input -->
-                <div class="col-sm-6 col-md-3">
+                <div class="col-sm-6 col-md-4">
                     <label for="visitsQuickSearch" class="form-label text-muted fw-medium" style="font-size: 0.785rem;">
                         <i class="bi bi-search me-1"></i> Live Quick Search
                     </label>
                     <input type="text" id="visitsQuickSearch" class="form-control" placeholder="Search visits..." autocomplete="off">
                 </div>
 
-                <!-- Actions -->
-                <div class="col-md-3 d-flex gap-2">
-                    <button type="submit" class="btn btn-primary flex-fill">
-                        <i class="bi bi-search me-1"></i> Filter Visits
-                    </button>
-                    <a href="{{ url_for('visits') }}" class="btn btn-outline-secondary" title="Reset filters">
+                <!-- Reset Button -->
+                <div class="col-sm-6 col-md-1 d-flex">
+                    <a href="{{ url_for('visits') }}" class="btn btn-outline-secondary w-100" title="Reset all filters">
                         <i class="bi bi-arrow-counterclockwise"></i>
                     </a>
                 </div>
@@ -70,10 +72,10 @@
     </div>
 
     <!-- Visits Grid -->
-    <div class="row g-3 mb-4">
+    <div id="visitsGrid" class="row g-3 mb-4">
         {% for visit in visits %}
-        <div class="col-md-6 col-xl-4">
-            <div class="card h-100">
+        <div class="col-md-6 col-xl-4 visit-card-wrapper">
+            <div class="card h-100 clickable-card" data-href="{{ url_for('visit_detail', visit_id=visit.id) }}" role="button" tabindex="0" style="cursor: pointer;">
                 <div class="card-header py-3">
                     <div class="d-flex align-items-center justify-content-between gap-2">
                         <div class="d-flex align-items-center gap-2 overflow-hidden">

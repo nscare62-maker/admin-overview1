@@ -40,11 +40,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // -------------------------------------------------------------
-    // 2. Clickable Table Rows with Keyboard Accessibility
+    // 2. Clickable Table Rows and Cards with Keyboard Accessibility
     // -------------------------------------------------------------
-    document.querySelectorAll('.clickable-row').forEach(row => {
+    document.querySelectorAll('.clickable-row, .clickable-card').forEach(row => {
         row.addEventListener('click', function (e) {
-            // Prevent trigger if clicking on an explicit link, button, or form inside row
+            // Prevent trigger if clicking on an explicit link, button, or form inside
             if (e.target.closest('a, button, input, form, select')) {
                 return;
             }
@@ -205,10 +205,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Sessions Grid Quick Search
-    setupQuickSearch('sessionsQuickSearch', '.row.g-4', '.col-md-6.col-lg-4', 'No work sessions found matching');
+    setupQuickSearch('sessionsQuickSearch', '#sessionsGrid, .row.g-4', '.session-card-wrapper, .col-md-6.col-lg-4', 'No work sessions found matching');
 
     // Visits Grid Quick Search
-    setupQuickSearch('visitsQuickSearch', '.row.g-3.mb-4', '.col-md-6.col-xl-4', 'No field visits found matching');
+    setupQuickSearch('visitsQuickSearch', '#visitsGrid, .row.g-3.mb-4', '.visit-card-wrapper, .col-md-6.col-xl-4', 'No field visits found matching');
 
     // -------------------------------------------------------------
     // 6. Generic Table Search Helper

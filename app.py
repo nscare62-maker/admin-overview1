@@ -316,7 +316,7 @@ ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
 
 _firebase_cache = {}
-_firebase_cache_ttl = 5
+_firebase_cache_ttl = 30
 
 
 def read_firebase_path(path):
@@ -1105,10 +1105,12 @@ def sessions():
                 except Exception:
                     start_time_for_sort = 0
             
+            emp_name = emp_data.get('name') or sess_data.get('employeeName') or 'Unknown'
             sessions_list.append({
                 'id': sess_id,
                 'employeeId': emp_id,
-                'employeeName': emp_data.get('name') or sess_data.get('employeeName') or 'Unknown',
+                'employeeName': emp_name,
+                'employeeInitials': get_employee_initials(emp_name),
                 'employeeRole': emp_data.get('role', sess_data.get('employeeRole', 'N/A')),
                 'workType': sess_data.get('workType'),
                 'status': sess_data.get('status'),
@@ -1749,9 +1751,6 @@ def visits():
 
             emp_name = emp_data.get('name') or visit_data.get('employeeName') or 'Unknown'
             emp_photo = None
-            sess_id = visit_data.get('sessionId')
-            if sess_id:
-                emp_photo = load_session_photo(sess_id, 'start', all_sessions.get(sess_id))
             has_visit_photo = bool(
                 visit_data.get('photoUri') and not str(visit_data.get('photoUri')).startswith(('/data/', 'file:'))
                 or visit_data.get('photo') or visit_data.get('imageBase64')
@@ -1780,11 +1779,7 @@ def visits():
         for session_id, session_data in all_sessions.items():
             if not isinstance(session_data, dict):
                 continue
-            status = str(session_data.get('status', '')).upper()
-            work_type = str(session_data.get('workType', '')).upper()
-            if (session_id in linked_session_ids or
-                    status not in ('COMPLETED', 'ENDED', 'CLOSED') or
-                    work_type not in ('FIELD', 'FARM', 'FIELD_WORK')):
+            if session_id in linked_session_ids:
                 continue
 
             end_time = session_data.get('endTime') or session_data.get('startTime') or '0'
@@ -1803,25 +1798,26 @@ def visits():
             emp_data = get_employee_by_id(all_employees, emp_id) or all_employees.get(emp_id, {})
             location = session_data.get('endLocation') or session_data.get('startLocation') or {}
             emp_name = emp_data.get('name') or session_data.get('employeeName') or 'Unknown'
-            sess_photo = load_session_photo(session_id, 'start', session_data)
+            has_photo = session_photo_available.get(session_id, False)
+            work_type = str(session_data.get('workType', '')).upper()
             visits_list.append({
                 'id': f'session-{session_id}',
                 'employeeId': emp_id,
                 'employeeName': emp_name,
                 'employeeInitials': get_employee_initials(emp_name),
-                'employeePhoto': sess_photo,
+                'employeePhoto': None,
                 'date': session_date,
                 'time': visit_info['time'],
                 'datetime': visit_info['datetime'],
                 'timestamp': end_time,
                 'timestampSort': visit_info['sort_key'],
-                'leadName': 'Work session',
+                'leadName': 'Field check-in' if work_type in ('FIELD', 'FARM', 'FIELD_WORK') else 'Work session',
                 'leadPhone': 'N/A',
                 'latitude': location.get('latitude') if isinstance(location, dict) else None,
                 'longitude': location.get('longitude') if isinstance(location, dict) else None,
-                'notes': 'Completed field work session',
+                'notes': f"{work_type.capitalize() if work_type else 'Work'} check-in",
                 'photoId': None,
-                'hasPhoto': session_photo_available.get(session_id, False)
+                'hasPhoto': has_photo
             })
         
         # Sort by newest date first, then earliest time first within the same date
@@ -1888,14 +1884,15 @@ def visit_detail(visit_id):
             session_data = db.reference(f'sessions/{session_id}').get()
             if session_data:
                 location = session_data.get('endLocation') or session_data.get('startLocation') or {}
+                work_type = str(session_data.get('workType', '')).upper()
                 visit = {
                     'employeeId': session_data.get('employeeId'),
                     'createdAt': session_data.get('endTime') or session_data.get('startTime'),
-                    'leadName': 'Work session',
+                    'leadName': 'Field check-in' if work_type in ('FIELD', 'FARM', 'FIELD_WORK') else 'Work session',
                     'leadPhone': 'N/A',
                     'latitude': location.get('latitude') if isinstance(location, dict) else None,
                     'longitude': location.get('longitude') if isinstance(location, dict) else None,
-                    'notes': 'Completed field work session'
+                    'notes': f"{work_type.capitalize() if work_type else 'Work'} check-in"
                 }
             else:
                 visit = None
@@ -1914,11 +1911,10 @@ def visit_detail(visit_id):
             flash('Visit not found!', 'error')
             return redirect(url_for('visits'))
         
-        # Get employee data using helper function
+        # Get employee data using cached helper function
         emp_id = visit.get('employeeId')
-        employees_ref = db.reference('users')
-        all_employees = employees_ref.get() or {}
-        employee = get_employee_by_id(all_employees, emp_id)
+        all_employees = read_firebase_path('users')
+        employee = get_employee_by_id(all_employees, emp_id) or {}
 
         route_points = []
         if session_data:
@@ -1940,18 +1936,6 @@ def visit_detail(visit_id):
                         'longitude': item['longitude'],
                         'label': item.get('leadName') or 'Visit',
                         'timestamp': item.get('timestamp') or item.get('createdAt')
-                    })
-
-        if session_id:
-            location_history = read_firebase_path('locations')
-            for item in location_history.values():
-                if (item.get('sessionId') == session_id and item.get('latitude') and
-                        item.get('longitude')):
-                    route_points.append({
-                        'latitude': item['latitude'],
-                        'longitude': item['longitude'],
-                        'label': 'Employee movement',
-                        'timestamp': item.get('timestamp')
                     })
 
         if (not generated_from_session and visit.get('latitude') and
@@ -1984,9 +1968,6 @@ def visit_detail(visit_id):
         visit['workStartTime'] = session_data.get('startTime') if session_data else None
         visit['workEndTime'] = session_data.get('endTime') if session_data else None
 
-        visit['startPhoto'] = load_session_photo(session_id, 'start', session_data) if session_id else None
-        visit['endPhoto'] = load_session_photo(session_id, 'end', session_data) if session_id else None
-
         # Resolve visit photo from photoUri or photo or imageBase64
         photo_val = visit.get('photo') or visit.get('imageBase64') or visit.get('imageUrl')
         if not photo_val and visit.get('photoUri'):
@@ -2001,8 +1982,17 @@ def visit_detail(visit_id):
             elif photo_uri.startswith(('data:image', 'http://', 'https://')):
                 photo_val = photo_uri
 
+        if photo_val:
+            photo_val = normalize_photo(photo_val)
+
+        # Fallback to session photo only if no visit photo exists
+        if not photo_val and session_id:
+            photo_val = load_session_photo(session_id, 'start', session_data) or load_session_photo(session_id, 'end', session_data)
+
         visit['photo'] = photo_val
-        visit['employeePhoto'] = visit.get('startPhoto')
+        visit['startPhoto'] = photo_val
+        visit['endPhoto'] = photo_val
+        visit['employeePhoto'] = None
         visit['employeeInitials'] = get_employee_initials(employee.get('name', 'Unknown'))
         
         visit['id'] = visit_id
